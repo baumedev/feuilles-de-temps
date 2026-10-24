@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f2a24">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Punch">
+<link rel="manifest" href="manifest-punch.json">
+<link rel="icon" href="icone.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icone-192.png">
+<title>Punch</title>
+<style>
+/* App punch : une seule chose, entrer ses heures vite au téléphone.
+   Gros boutons, une étape à la fois, barre d'action collée en bas. */
+:root {
+  --fond: #f4f1ea;
+  --carte: #ffffff;
+  --encre: #1f2a24;
+  --encre-2: #5b625d;
+  --ligne: #e3ddd1;
+  --accent: #c2410c;
+  --accent-fonce: #9a3412;
+  --accent-pale: #fff1e8;
+  --vert: #15803d;
+  --vert-pale: #e8f5ec;
+  --jaune: #a16207;
+  --jaune-pale: #fdf6dd;
+  --rouge: #b91c1c;
+  --rouge-pale: #fdecec;
+  --bleu: #1e4e8c;
+  --bleu-pale: #e6eef7;
+  --maladie: #7c3aed;
+  --conge: #0e7490;
+  --ferie: #4d5a52;
+  --rayon: 16px;
+  --ombre: 0 1px 2px rgba(31,42,36,.06), 0 3px 10px rgba(31,42,36,.06);
+  --haut: env(safe-area-inset-top, 0px);
+  --bas: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--fond); color: var(--encre); }
+body { font: 17px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+h1, h2, h3, p { margin: 0; }
+.ecran { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+.contenu { flex: 1; width: 100%; max-width: 560px; margin: 0 auto; padding: 16px 16px 24px; display: flex; flex-direction: column; gap: 14px; }
+.contenu.avec-barre { padding-bottom: calc(110px + var(--bas)); }
+
+/* En-tête */
+.entete { position: sticky; top: 0; z-index: 10; background: var(--encre); color: #fff; padding: calc(10px + var(--haut)) 12px 12px; }
+.entete-in { max-width: 560px; margin: 0 auto; display: flex; align-items: center; gap: 10px; min-height: 40px; }
+.entete .titre { flex: 1; font-weight: 700; font-size: 19px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entete .sous { font-size: 13px; opacity: .75; font-weight: 400; }
+.entete button { background: transparent; border: 1px solid rgba(255,255,255,.3); color: #fff; border-radius: 10px; min-height: 40px; min-width: 40px; padding: 0 12px; font-size: 15px; }
+.entete button.icone { font-size: 22px; padding: 0; }
+.progression { max-width: 560px; margin: 10px auto 0; display: flex; gap: 6px; }
+.progression span { flex: 1; height: 4px; border-radius: 4px; background: rgba(255,255,255,.22); }
+.progression span.fait { background: #fb923c; }
+
+/* Éléments */
+.carte { background: var(--carte); border-radius: var(--rayon); box-shadow: var(--ombre); padding: 16px; }
+.muet { color: var(--encre-2); }
+.petit { font-size: 14px; }
+.gras { font-weight: 700; }
+.centre { text-align: center; }
+.ligne { display: flex; align-items: center; gap: 10px; }
+.espace { flex: 1; }
+.etiquette { font-size: 13px; font-weight: 700; color: var(--encre-2); text-transform: uppercase; letter-spacing: .06em; }
+
+.btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 56px; border-radius: 14px; border: 1px solid var(--ligne); background: var(--carte); font-weight: 700; font-size: 18px; padding: 0 16px; }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.primaire { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primaire:active:not(:disabled) { background: var(--accent-fonce); }
+.btn.geant { min-height: 72px; font-size: 21px; border-radius: 18px; box-shadow: 0 6px 18px rgba(194,65,12,.28); }
+.btn.danger { color: var(--rouge); border-color: #f0c9c9; background: #fff; }
+.btn.lien { border: 0; background: none; color: var(--accent); min-height: 44px; font-size: 16px; width: auto; padding: 0 8px; }
+.btn.secondaire { font-size: 16px; min-height: 48px; }
+button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid #fb923c; outline-offset: 2px; }
+
+.badge { display: inline-block; font-size: 13px; font-weight: 700; border-radius: 99px; padding: 3px 10px; white-space: nowrap; }
+.badge.soumis { background: var(--jaune-pale); color: var(--jaune); }
+.badge.approuve { background: var(--vert-pale); color: var(--vert); }
+.badge.refuse { background: var(--rouge-pale); color: var(--rouge); }
+.badge.qbo { background: var(--bleu-pale); color: var(--bleu); }
+.badge.abs-maladie { background: var(--maladie); color: #fff; }
+.badge.abs-conge { background: var(--conge); color: #fff; }
+.badge.abs-ferie { background: var(--ferie); color: #fff; }
+.alerte { border-radius: 12px; padding: 12px 14px; font-size: 15px; }
+.alerte.jaune { background: var(--jaune-pale); color: #6b4505; }
+.alerte.rouge { background: var(--rouge-pale); color: #7f1d1d; }
+.alerte.info { background: #eef2f0; }
+
+/* Accueil */
+.bonjour h1 { font-size: 26px; text-wrap: balance; }
+.aujourdhui .total { font-size: 40px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1; }
+.entree { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--ligne); padding: 12px 0; }
+.entree:first-child { border-top: 0; }
+.entree .infos { flex: 1; min-width: 0; }
+.entree .chantier { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entree .code { font-size: 14px; color: var(--encre-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entree .h { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.absences { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.absences button { min-height: 48px; border-radius: 12px; border: 1px solid var(--ligne); background: #fff; font-weight: 700; font-size: 15px; color: var(--encre-2); }
+.absences button.actif.maladie { background: var(--maladie); border-color: var(--maladie); color: #fff; }
+.absences button.actif.conge { background: var(--conge); border-color: var(--conge); color: #fff; }
+.absences button.actif.ferie { background: var(--ferie); border-color: var(--ferie); color: #fff; }
+
+.semaine-nav { display: flex; align-items: center; gap: 8px; }
+.semaine-nav button { width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--ligne); background: #fff; font-size: 20px; }
+.semaine-nav .lib { flex: 1; text-align: center; font-weight: 700; }
+.jours { padding: 4px 16px; }
+.jour { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: 0; border-top: 1px solid var(--ligne); padding: 13px 0; text-align: left; }
+.jour:first-child { border-top: 0; }
+.jour .nom { flex: 1; font-weight: 600; }
+.jour.auj .nom { color: var(--accent); }
+.jour .tot { font-weight: 800; font-variant-numeric: tabular-nums; min-width: 52px; text-align: right; }
+.jour .vide { color: var(--encre-2); font-weight: 400; }
+.point { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.point.soumis { background: var(--jaune); }
+.point.approuve { background: var(--vert); }
+.point.refuse { background: var(--rouge); }
+.point.qbo { background: var(--bleu); }
+
+/* Assistant */
+.question { font-size: 24px; font-weight: 800; text-wrap: balance; }
+.puces { display: flex; gap: 8px; flex-wrap: wrap; }
+.puces button { min-height: 44px; padding: 0 16px; border-radius: 99px; border: 1px solid var(--ligne); background: #fff; font-weight: 700; font-size: 16px; }
+.puces button.actif { background: var(--encre); border-color: var(--encre); color: #fff; }
+.puces input[type=date] { min-height: 44px; border-radius: 99px; border: 1px solid var(--ligne); padding: 0 14px; background: #fff; font-size: 16px; }
+.choix-liste { display: flex; flex-direction: column; gap: 10px; }
+.choix { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 12px 16px; border-radius: 14px; border: 1px solid var(--ligne); background: #fff; text-align: left; }
+.choix .t { font-weight: 700; font-size: 18px; }
+.choix .s { font-size: 14px; color: var(--encre-2); }
+.choix.actif { border: 2px solid var(--accent); background: var(--accent-pale); padding: 11px 15px; }
+.choix .fleche { margin-left: auto; color: var(--encre-2); font-size: 22px; }
+
+.carte-ligne { display: flex; flex-direction: column; gap: 12px; }
+.carte-ligne .tete { display: flex; align-items: center; gap: 8px; }
+.code-btn { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 60px; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--ligne); background: #faf8f3; text-align: left; }
+.code-btn .num { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.code-btn .lib { flex: 1; min-width: 0; font-weight: 600; }
+.code-btn.vide { color: var(--accent); font-weight: 700; justify-content: center; border-style: dashed; border-color: var(--accent); background: #fff; }
+.compteur { display: grid; grid-template-columns: 64px 1fr 64px; gap: 8px; align-items: stretch; }
+.compteur button { min-height: 64px; border-radius: 14px; border: 1px solid var(--ligne); background: #fff; font-size: 30px; font-weight: 700; color: var(--encre); }
+.compteur input { min-width: 0; text-align: center; font-size: 30px; font-weight: 800; border-radius: 14px; border: 1px solid var(--ligne); background: #fff; font-variant-numeric: tabular-nums; }
+.raccourcis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.raccourcis button { min-height: 44px; border-radius: 10px; border: 1px solid var(--ligne); background: #faf8f3; font-weight: 700; }
+.segment { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--ligne); border-radius: 12px; overflow: hidden; }
+.segment button { min-height: 50px; border: 0; background: #fff; font-weight: 700; font-size: 16px; color: var(--encre-2); }
+.segment button + button { border-left: 1px solid var(--ligne); }
+.segment button.actif { background: var(--encre); color: #fff; }
+textarea { width: 100%; min-height: 84px; border-radius: 12px; border: 1px solid var(--ligne); padding: 12px 14px; font-size: 17px; background: #fff; resize: vertical; }
+.retirer { border: 0; background: none; color: var(--rouge); font-weight: 700; font-size: 15px; min-height: 40px; padding: 0 6px; margin-left: auto; }
+
+.barre { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: rgba(255,255,255,.96); backdrop-filter: blur(8px); border-top: 1px solid var(--ligne); padding: 12px 16px calc(12px + var(--bas)); }
+.barre-in { max-width: 560px; margin: 0 auto; display: flex; align-items: center; gap: 12px; }
+.barre .tot { white-space: nowrap; }
+.barre .tot b { font-size: 22px; font-variant-numeric: tabular-nums; }
+.barre .btn { flex: 1; }
+
+.resume dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; }
+.resume dt { color: var(--encre-2); }
+.resume dd { margin: 0; font-weight: 700; }
+.resume .rl { border-top: 1px solid var(--ligne); padding-top: 10px; margin-top: 10px; }
+.resume .rl .haut { display: flex; gap: 10px; font-weight: 700; }
+.resume .rl .haut .lib { flex: 1; min-width: 0; }
+.resume .rl .bas { color: var(--encre-2); font-size: 15px; }
+
+.succes { align-items: center; justify-content: center; text-align: center; gap: 16px; }
+.succes .crochet { width: 92px; height: 92px; border-radius: 50%; background: var(--vert); color: #fff; font-size: 52px; display: grid; place-items: center; animation: pop .35s ease-out; }
+@keyframes pop { from { transform: scale(.6); opacity: 0; } }
+
+/* Feuille de choix du code */
+.feuille-fond { position: fixed; inset: 0; z-index: 50; background: rgba(20,24,22,.5); display: flex; align-items: flex-end; justify-content: center; }
+.feuille { background: var(--fond); width: 100%; max-width: 560px; height: 88vh; height: 88dvh; border-radius: 20px 20px 0 0; display: flex; flex-direction: column; animation: monte .2s ease-out; }
+.feuille .haut { padding: 16px 16px 10px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--ligne); }
+.feuille .haut input { width: 100%; min-height: 50px; border-radius: 12px; border: 1px solid var(--ligne); padding: 0 14px; font-size: 17px; background: #fff; }
+.feuille .liste { flex: 1; overflow-y: auto; padding: 8px 16px calc(16px + var(--bas)); -webkit-overflow-scrolling: touch; }
+.feuille .groupe { font-size: 13px; font-weight: 700; color: var(--encre-2); text-transform: uppercase; letter-spacing: .05em; margin: 14px 0 6px; }
+.feuille .code { display: flex; gap: 10px; width: 100%; text-align: left; padding: 12px; border-radius: 12px; border: 0; background: #fff; margin-bottom: 6px; align-items: baseline; }
+.feuille .code .num { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.feuille .code .lib { font-weight: 600; }
+.feuille .code .desc { display: block; font-size: 13px; color: var(--encre-2); font-weight: 400; }
+@keyframes monte { from { transform: translateY(40px); opacity: .4; } }
+
+.toast { position: fixed; left: 50%; bottom: calc(120px + var(--bas)); transform: translateX(-50%); z-index: 100; background: var(--encre); color: #fff; padding: 12px 18px; border-radius: 12px; font-size: 16px; max-width: calc(100% - 32px); box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+.toast.erreur { background: var(--rouge); }
+
+.connexion { max-width: 400px; margin: 0 auto; padding: calc(48px + var(--haut)) 20px 24px; display: flex; flex-direction: column; gap: 14px; }
+.connexion h1 { font-size: 30px; }
+.champ { display: flex; flex-direction: column; gap: 6px; }
+.champ span { font-size: 14px; font-weight: 700; color: var(--encre-2); }
+.champ input { min-height: 56px; border-radius: 14px; border: 1px solid var(--ligne); padding: 0 16px; font-size: 18px; background: #fff; }
+.chargement { padding: 60px 16px; text-align: center; color: var(--encre-2); }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</head>
+<body>
+<div id="app"><div class="chargement">Chargement…</div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script>
+"use strict";
+
+const CONFIG = window.CONFIG || { SUPABASE_URL: "https://VOTRE-PROJET.supabase.co", SUPABASE_ANON_KEY: "VOTRE-CLE-ANON-PUBLIQUE" };
+
+/* ---------- Outils ---------- */
+const $ = (s) => document.querySelector(s);
+function h(tag, props, ...enfants) {
+  const el = document.createElement(tag);
+  const apres = {};
+  if (props) for (const [k, v] of Object.entries(props)) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on") && typeof v === "function") el.addEventListener(k.slice(2).toLowerCase(), v);
+    else if (k === "style" && typeof v === "object") Object.assign(el.style, v);
+    else if (k === "value" || k === "checked" || k === "disabled") apres[k] = v;
+    else el.setAttribute(k, v === true ? "" : String(v));
+  }
+  for (const e of enfants.flat(Infinity)) if (e !== null && e !== undefined && e !== false) el.append(e instanceof Node ? e : String(e));
+  for (const [k, v] of Object.entries(apres)) el[k] = v;
+  return el;
+}
+const pad = (n) => String(n).padStart(2, "0");
+const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const versDate = (s) => { const [a, m, j] = s.split("-").map(Number); return new Date(a, m - 1, j); };
+const ajouterJours = (d, n) => { const r = new Date(d.getFullYear(), d.getMonth(), d.getDate()); r.setDate(r.getDate() + n); return r; };
+const lundiDe = (d) => ajouterJours(d, -((d.getDay() + 6) % 7));
+const JOURS = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+const MOIS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juill.", "août", "sept.", "oct.", "nov.", "déc."];
+const dateLongue = (d) => `${JOURS[d.getDay()]} ${d.getDate()} ${MOIS[d.getMonth()]}`;
+const majuscule = (t) => t.replace(/^./, (c) => c.toUpperCase());
+const arrondi2 = (n) => Math.round(n * 100) / 100;
+const fmtNb = (n) => Number(n || 0).toLocaleString("fr-CA", { maximumFractionDigits: 2 });
+const fmtH = (n) => `${fmtNb(n)} h`;
+const somme = (l, f) => arrondi2(l.reduce((s, x) => s + Number(f(x) || 0), 0));
+function lireNombre(t) {
+  const s = String(t ?? "").trim().replace(/\s/g, "").replace(",", ".");
+  if (!s) return NaN;
+  const hm = s.match(/^(\d{1,2}):(\d{2})$/);
+  return hm ? Number(hm[1]) + Number(hm[2]) / 60 : Number(s);
+}
+function toast(m, type) {
+  document.querySelectorAll(".toast").forEach((t) => t.remove());
+  const t = h("div", { class: "toast" + (type === "erreur" ? " erreur" : ""), role: "status" }, m);
+  document.body.append(t);
+  setTimeout(() => t.remove(), type === "erreur" ? 5000 : 2500);
+}
+function messageErreur(e) {
+  const m = (e && (e.message || e.error_description)) || String(e);
+  if (/Invalid login credentials/i.test(m)) return "Courriel ou mot de passe invalide.";
+  if (/Email not confirmed/i.test(m)) return "Ton compte n’est pas encore confirmé : ouvre le courriel reçu.";
+  if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return "Pas de réseau. Réessaie dans un instant.";
+  if (/Database error saving new user|pas autorisé/i.test(m)) return "Ce courriel n’est pas autorisé. Demande au bureau de t’ajouter avec ce courriel.";
+  if (/already registered/i.test(m)) return "Ce courriel a déjà un compte. Connecte-toi.";
+  if (/Password should be/i.test(m)) return "Le mot de passe doit avoir au moins 6 caractères.";
+  if (/row-level security|permission denied/i.test(m)) return "Tu n’as pas la permission de faire ça.";
+  return m;
+}
+const erreur = (e) => { console.error(e); toast(messageErreur(e), "erreur"); };
+async function attendre(bouton, fn) {
+  if (bouton.disabled) return;
+  const t = bouton.textContent; bouton.disabled = true; bouton.textContent = "…";
+  try { return await fn(); } finally { bouton.disabled = false; bouton.textContent = t; }
+}
+
+/* ---------- Données ---------- */
+const S = {
+  session: null, moi: null, chantiers: [], codes: [], recents: { chantiers: [], codes: [] },
+  vue: "accueil", semaine: lundiDe(new Date()), jour: null, brouillon: null, etape: 1, creerCompte: false, dernierEnvoi: null,
+};
+const configOK = !CONFIG.SUPABASE_URL.includes("VOTRE-PROJET") && !CONFIG.SUPABASE_ANON_KEY.includes("VOTRE-CLE");
+const sb = configOK && window.supabase ? window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY) : null;
+async function q(p) { const { data, error } = await p; if (error) throw error; return data; }
+async function toutes(f) { const r = []; for (let i = 0; ; i += 1000) { const p = await q(f().range(i, i + 999)); r.push(...p); if (p.length < 1000) return r; } }
+
+const TYPES_ABSENCE = { maladie: "Maladie", conge: "Congé", ferie: "Férié" };
+const codeInfo = (c) => S.codes.find((x) => x.code === c);
+const nomChantier = (id) => { const c = S.chantiers.find((x) => x.id === id); return c ? c.nom : "Chantier"; };
+const libelleCode = (c) => { const x = codeInfo(c); return x ? `${x.code} ${x.libelle}` : (c || "Sans code"); };
+const verrouillee = (g) => Boolean(g && g.exporte_qbo_le);
+
+function grouper(rangees) {
+  const m = new Map();
+  for (const r of rangees) { const k = r.groupe || `id-${r.id}`; if (!m.has(k)) m.set(k, []); m.get(k).push(r); }
+  const rang = { refuse: 0, soumis: 1, approuve: 2 };
+  const ordre = (c) => { const x = codeInfo(c); return x ? x.ordre : 9999; };
+  return [...m.values()].map((l) => {
+    l.sort((a, b) => ordre(a.code_cout) - ordre(b.code_cout));
+    const p = l[0], v = l.find((x) => x.exporte_qbo_le), rf = l.find((x) => x.motif_refus);
+    return { groupe: p.groupe, date: p.date, chantier_id: p.chantier_id, lignes: l, ids: l.map((x) => x.id),
+      statut: l.map((x) => x.statut).sort((a, b) => rang[a] - rang[b])[0], motif_refus: rf ? rf.motif_refus : null,
+      exporte_qbo_le: v ? v.exporte_qbo_le : null, heures: somme(l, (x) => x.heures) };
+  });
+}
+function badge(g) {
+  if (verrouillee(g)) return h("span", { class: "badge qbo" }, "🔒 Facturé");
+  return h("span", { class: "badge " + g.statut }, { soumis: "Envoyé", approuve: "Approuvé", refuse: "À corriger" }[g.statut]);
+}
+
+async function chargerReferences() {
+  const [chantiers, codes, recentes] = await Promise.all([
+    q(sb.from("chantiers").select("*").eq("actif", true).order("nom")),
+    q(sb.from("codes_cout").select("*").eq("actif", true).order("ordre").order("code")),
+    q(sb.from("entrees").select("chantier_id, code_cout, created_at").eq("employe_id", S.moi.id).order("created_at", { ascending: false }).limit(60)),
+  ]);
+  S.chantiers = chantiers; S.codes = codes;
+  S.recents.chantiers = [...new Set(recentes.map((r) => r.chantier_id))].filter((id) => chantiers.some((c) => c.id === id));
+  S.recents.codes = [...new Set(recentes.map((r) => r.code_cout))].filter((c) => codes.some((x) => x.code === c)).slice(0, 6);
+}
+async function chargerSemaine(lundi) {
+  const debut = ymd(lundi), fin = ymd(ajouterJours(lundi, 6));
+  const [rangees, absences] = await Promise.all([
+    toutes(() => sb.from("entrees").select("*").eq("employe_id", S.moi.id).gte("date", debut).lte("date", fin).order("date").order("created_at")),
+    toutes(() => sb.from("absences").select("*").eq("employe_id", S.moi.id).gte("date", debut).lte("date", fin)),
+  ]);
+  return { groupes: grouper(rangees), rangees, absences };
+}
+async function basculerAbsence(date, type, actuelle) {
+  if (actuelle && actuelle.type === type) await q(sb.from("absences").delete().eq("id", actuelle.id));
+  else if (actuelle) await q(sb.from("absences").update({ type }).eq("id", actuelle.id));
+  else await q(sb.from("absences").insert({ employe_id: S.moi.id, date, type }));
+}
+
+/* ---------- Rendu ---------- */
+let numero = 0;
+async function rendre() {
+  const n = ++numero;
+  const app = $("#app");
+  if (!configOK) { app.replaceChildren(h("div", { class: "connexion" }, h("h1", null, "Configuration requise"), h("p", { class: "muet" }, "Remplis le fichier config.js avec les informations de ton projet Supabase."))); return; }
+  if (!S.session || !S.moi) { app.replaceChildren(S.creerCompte ? vueCreerCompte() : vueConnexion()); return; }
+  try {
+    const vue = { accueil: vueAccueil, jour: vueJour, assistant: vueAssistant, succes: vueSucces }[S.vue] || vueAccueil;
+    const el = await vue();
+    if (n === numero) { app.replaceChildren(el); }
+  } catch (e) {
+    console.error(e);
+    if (n === numero) app.replaceChildren(h("div", { class: "connexion" }, h("h1", null, "Oups"), h("p", { class: "muet" }, messageErreur(e)), h("button", { class: "btn", onclick: rendre }, "Réessayer")));
+  }
+}
+function aller(vue) { document.querySelectorAll(".toast.erreur").forEach((t) => t.remove()); S.vue = vue; window.scrollTo(0, 0); rendre(); }
+
+function entete(titre, sous, gauche, droite) {
+  return h("header", { class: "entete" },
+    h("div", { class: "entete-in" }, gauche,
+      h("div", { class: "titre" }, titre, sous ? h("div", { class: "sous" }, sous) : null), droite),
+    S.vue === "assistant" ? h("div", { class: "progression", "aria-hidden": "true" }, [1, 2, 3].map((i) => h("span", { class: i <= S.etape ? "fait" : "" }))) : null);
+}
+
+/* ---------- Connexion ---------- */
+function vueConnexion() {
+  const courriel = h("input", { type: "email", inputmode: "email", autocomplete: "username", required: true });
+  const mdp = h("input", { type: "password", autocomplete: "current-password", required: true });
+  const b = h("button", { class: "btn primaire", type: "submit" }, "Me connecter");
+  return h("div", { class: "connexion" },
+    h("h1", null, "Punch"),
+    h("p", { class: "muet" }, "Entre tes heures en quelques secondes."),
+    h("form", { class: "champ", style: { gap: "14px" }, onsubmit: (e) => { e.preventDefault(); attendre(b, async () => {
+      const { error } = await sb.auth.signInWithPassword({ email: courriel.value.trim(), password: mdp.value });
+      if (error) erreur(error);
+    }); } },
+      h("label", { class: "champ" }, h("span", null, "Courriel"), courriel),
+      h("label", { class: "champ" }, h("span", null, "Mot de passe"), mdp), b),
+    h("button", { class: "btn lien", type: "button", onclick: async () => {
+      if (!courriel.value.trim()) { toast("Entre d’abord ton courriel."); courriel.focus(); return; }
+      const { error } = await sb.auth.resetPasswordForEmail(courriel.value.trim(), { redirectTo: location.origin + location.pathname });
+      if (error) erreur(error); else toast("Demande envoyée. Si aucun courriel n’arrive d’ici quelques minutes, demande au bureau de réinitialiser ton compte.");
+    } }, "Mot de passe oublié ?"),
+    h("button", { class: "btn secondaire", type: "button", onclick: () => { S.creerCompte = true; rendre(); } }, "Première fois ? Créer mon compte"));
+}
+function vueCreerCompte() {
+  const courriel = h("input", { type: "email", inputmode: "email", autocomplete: "username", required: true });
+  const mdp = h("input", { type: "password", autocomplete: "new-password", minlength: 6, required: true });
+  const mdp2 = h("input", { type: "password", autocomplete: "new-password", minlength: 6, required: true });
+  const b = h("button", { class: "btn primaire", type: "submit" }, "Créer mon compte");
+  return h("div", { class: "connexion" },
+    h("h1", null, "Créer mon compte"),
+    h("p", { class: "muet" }, "Utilise le courriel que le bureau a entré pour toi."),
+    h("form", { class: "champ", style: { gap: "14px" }, onsubmit: (e) => { e.preventDefault();
+      if (mdp.value !== mdp2.value) { toast("Les deux mots de passe ne sont pas identiques.", "erreur"); return; }
+      attendre(b, async () => {
+        const { data, error } = await sb.auth.signUp({ email: courriel.value.trim(), password: mdp.value, options: { emailRedirectTo: location.origin + location.pathname } });
+        if (error) { erreur(error); return; }
+        S.creerCompte = false;
+        if (!data || !data.session) { toast("Compte créé. Ouvre le courriel de confirmation, puis connecte-toi."); rendre(); }
+      }); } },
+      h("label", { class: "champ" }, h("span", null, "Courriel"), courriel),
+      h("label", { class: "champ" }, h("span", null, "Mot de passe (6 caractères min.)"), mdp),
+      h("label", { class: "champ" }, h("span", null, "Confirmer"), mdp2), b),
+    h("button", { class: "btn lien", type: "button", onclick: () => { S.creerCompte = false; rendre(); } }, "J’ai déjà un compte"));
+}
+
+/* ---------- Accueil ---------- */
+function boutonsAbsence(date, actuelle) {
+  return h("div", { class: "absences", role: "group", "aria-label": "Journée non travaillée" },
+    Object.entries(TYPES_ABSENCE).map(([t, lib]) => h("button", {
+      class: t + (actuelle && actuelle.type === t ? " actif" : ""), "aria-pressed": String(Boolean(actuelle && actuelle.type === t)),
+      onclick: (e) => attendre(e.currentTarget, async () => { try { await basculerAbsence(date, t, actuelle); rendre(); } catch (err) { erreur(err); } }),
+    }, lib)));
+}
+function carteEntree(g) {
+  return h("button", { class: "entree", onclick: () => ouvrirEntree(g) },
+    h("div", { class: "infos" },
+      h("div", { class: "chantier" }, nomChantier(g.chantier_id)),
+      g.lignes.map((l) => h("div", { class: "code" }, libelleCode(l.code_cout), g.lignes.length > 1 ? ` · ${fmtH(l.heures)}` : "")),
+      g.statut === "refuse" && g.motif_refus ? h("div", { class: "code", style: { color: "var(--rouge)" } }, "Motif : ", g.motif_refus) : null),
+    badge(g), h("span", { class: "h" }, fmtH(g.heures)));
+}
+
+async function vueAccueil() {
+  const lundi = S.semaine;
+  const { groupes, rangees, absences } = await chargerSemaine(lundi);
+  const auj = ymd(new Date());
+  const cetteSemaine = ymd(lundi) === ymd(lundiDe(new Date()));
+  const duJour = groupes.filter((g) => g.date === auj);
+  const absAuj = absences.find((a) => a.date === auj);
+  const aCorriger = groupes.filter((g) => g.statut === "refuse");
+  const prenom = S.moi.nom.split(" ")[0];
+  return h("div", { class: "ecran" },
+    entete("Punch", null, null, h("button", { onclick: async () => { await sb.auth.signOut(); } }, "Quitter")),
+    h("main", { class: "contenu" },
+      h("div", { class: "bonjour" }, h("h1", null, `Salut ${prenom} !`), h("p", { class: "muet" }, majuscule(dateLongue(new Date())))),
+      aCorriger.length ? h("div", { class: "alerte rouge" }, `${aCorriger.length} entrée${aCorriger.length > 1 ? "s sont" : " est"} à corriger. Touche-la dans ta semaine.`) : null,
+      h("section", { class: "carte aujourdhui" },
+        h("div", { class: "ligne" }, h("span", { class: "etiquette" }, "Aujourd’hui"), h("span", { class: "espace" }),
+          absAuj ? h("span", { class: "badge abs-" + absAuj.type }, TYPES_ABSENCE[absAuj.type]) : null),
+        h("div", { class: "total", style: { margin: "6px 0 4px" } }, fmtH(somme(duJour, (g) => g.heures))),
+        duJour.length ? h("div", null, duJour.map(carteEntree)) : h("p", { class: "muet" }, absAuj ? "Journée non travaillée." : "Rien d’entré pour aujourd’hui.")),
+      h("button", { class: "btn primaire geant", onclick: () => nouvelleEntree(auj) }, "+ Punch mes heures"),
+      h("div", null, h("div", { class: "etiquette", style: { marginBottom: "8px" } }, "Pas travaillé aujourd’hui ?"), boutonsAbsence(auj, absAuj)),
+      h("section", null,
+        h("div", { class: "semaine-nav", style: { marginBottom: "10px" } },
+          h("button", { "aria-label": "Semaine précédente", onclick: () => { S.semaine = ajouterJours(lundi, -7); rendre(); } }, "‹"),
+          h("div", { class: "lib" }, cetteSemaine ? "Ma semaine" : `Semaine du ${lundi.getDate()} ${MOIS[lundi.getMonth()]}`,
+            h("div", { class: "muet petit", style: { fontWeight: 400 } }, `${fmtH(somme(rangees, (r) => r.heures))} au total`)),
+          h("button", { "aria-label": "Semaine suivante", onclick: () => { S.semaine = ajouterJours(lundi, 7); rendre(); } }, "›")),
+        h("div", { class: "carte jours" }, [...Array(7)].map((_, i) => {
+          const d = ajouterJours(lundi, i), cle = ymd(d);
+          const gs = groupes.filter((g) => g.date === cle);
+          const ab = absences.find((a) => a.date === cle);
+          const pire = gs.some(verrouillee) && gs.every(verrouillee) ? "qbo" : gs.length ? gs.map((g) => g.statut).sort((a, b) => ({ refuse: 0, soumis: 1, approuve: 2 })[a] - ({ refuse: 0, soumis: 1, approuve: 2 })[b])[0] : null;
+          return h("button", { class: "jour" + (cle === auj ? " auj" : ""), onclick: () => { S.jour = cle; aller("jour"); } },
+            pire ? h("span", { class: "point " + pire }) : h("span", { class: "point" }),
+            h("span", { class: "nom" }, majuscule(dateLongue(d))),
+            ab ? h("span", { class: "badge abs-" + ab.type }, TYPES_ABSENCE[ab.type]) : null,
+            h("span", { class: "tot" + (gs.length ? "" : " vide") }, gs.length ? fmtH(somme(gs, (g) => g.heures)) : "—"));
+        })),
+        !cetteSemaine ? h("button", { class: "btn lien", style: { margin: "6px auto 0", display: "block" }, onclick: () => { S.semaine = lundiDe(new Date()); rendre(); } }, "Revenir à cette semaine") : null)));
+}
+
+/* ---------- Une journée ---------- */
+async function vueJour() {
+  const d = versDate(S.jour);
+  const { groupes, absences } = await chargerSemaine(lundiDe(d));
+  const gs = groupes.filter((g) => g.date === S.jour);
+  const ab = absences.find((a) => a.date === S.jour);
+  return h("div", { class: "ecran" },
+    entete(majuscule(dateLongue(d)), gs.length ? fmtH(somme(gs, (g) => g.heures)) : null,
+      h("button", { class: "icone", "aria-label": "Retour", onclick: () => aller("accueil") }, "‹"), null),
+    h("main", { class: "contenu" },
+      gs.length ? h("div", { class: "carte", style: { padding: "4px 16px" } }, gs.map(carteEntree)) : h("p", { class: "muet centre", style: { padding: "20px 0" } }, ab ? "Journée non travaillée." : "Rien d’entré pour cette journée."),
+      h("button", { class: "btn primaire geant", onclick: () => nouvelleEntree(S.jour) }, "+ Punch des heures"),
+      h("div", null, h("div", { class: "etiquette", style: { marginBottom: "8px" } }, "Journée non travaillée"), boutonsAbsence(S.jour, ab))));
+}
+
+/* ---------- Assistant : où → quoi → vérifier ---------- */
+function nouvelleLigne() {
+  const c = S.chantiers.find((x) => x.id === (S.brouillon && S.brouillon.chantier_id));
+  return { code_cout: "", heures: "", facturable: c ? c.facturable : true, note: "" };
+}
+function nouvelleEntree(date) {
+  S.brouillon = { groupe: null, date, chantier_id: null, statut: null, lignes: [], origine: S.vue };
+  S.brouillon.lignes = [nouvelleLigne()];
+  S.etape = 1; aller("assistant");
+}
+function ouvrirEntree(g) {
+  S.brouillon = { groupe: g.groupe, ids: g.ids, date: g.date, chantier_id: g.chantier_id, statut: g.statut, motif: g.motif_refus,
+    verrouille: verrouillee(g), origine: S.vue,
+    lignes: g.lignes.map((l) => ({ code_cout: l.code_cout || "", heures: fmtNb(l.heures), facturable: l.facturable, note: l.note || "" })) };
+  S.etape = S.brouillon.verrouille ? 3 : 2; aller("assistant");
+}
+function quitterAssistant() { const o = S.brouillon && S.brouillon.origine; S.brouillon = null; aller(o === "jour" ? "jour" : "accueil"); }
+
+function vueAssistant() {
+  const B = S.brouillon;
+  if (!B) { S.vue = "accueil"; return vueAccueil(); }
+  const retour = h("button", { class: "icone", "aria-label": "Retour", onclick: () => { if (S.etape > 1 && !B.verrouille) { S.etape--; rendre(); } else quitterAssistant(); } }, "‹");
+  const fermer = h("button", { class: "icone", "aria-label": "Annuler", onclick: quitterAssistant }, "×");
+  const corps = S.etape === 1 ? etapeOu(B) : S.etape === 2 ? etapeQuoi(B) : etapeVerifier(B);
+  return h("div", { class: "ecran" },
+    entete(B.groupe ? "Modifier" : "Punch", majuscule(dateLongue(versDate(B.date))), retour, fermer),
+    corps);
+}
+
+function etapeOu(B) {
+  const auj = ymd(new Date()), hier = ymd(ajouterJours(new Date(), -1));
+  const autre = h("input", { type: "date", value: B.date, "aria-label": "Autre date", max: ymd(ajouterJours(new Date(), 7)),
+    onchange: (e) => { if (e.target.value) { B.date = e.target.value; rendre(); } } });
+  const recents = S.recents.chantiers;
+  const tri = [...S.chantiers].sort((a, b) => {
+    const ra = recents.indexOf(a.id), rb = recents.indexOf(b.id);
+    return (ra < 0 ? 99 : ra) - (rb < 0 ? 99 : rb) || a.nom.localeCompare(b.nom, "fr");
+  });
+  return h("main", { class: "contenu" },
+    h("div", { class: "puces" },
+      h("button", { class: B.date === auj ? "actif" : "", onclick: () => { B.date = auj; rendre(); } }, "Aujourd’hui"),
+      h("button", { class: B.date === hier ? "actif" : "", onclick: () => { B.date = hier; rendre(); } }, "Hier"),
+      autre),
+    h("h2", { class: "question" }, "Où as-tu travaillé ?"),
+    S.chantiers.length ? h("div", { class: "choix-liste" }, tri.map((c, i) => h("button", { class: "choix" + (c.id === B.chantier_id ? " actif" : ""),
+      onclick: () => {
+        const change = B.chantier_id !== c.id;
+        B.chantier_id = c.id;
+        if (change && !B.groupe) B.lignes.forEach((l) => { l.facturable = c.facturable; });
+        S.etape = 2; rendre();
+      } },
+      h("div", null, h("div", { class: "t" }, c.nom), h("div", { class: "s" }, [c.client, i === 0 && recents[0] === c.id ? "Dernier utilisé" : null].filter(Boolean).join(" · "))),
+      h("span", { class: "fleche" }, "›"))))
+      : h("div", { class: "alerte jaune" }, "Aucun chantier actif. Avise le bureau."));
+}
+
+function compteur(l, majTotal) {
+  const champ = h("input", { type: "text", inputmode: "decimal", value: l.heures, placeholder: "0", "aria-label": "Heures" });
+  champ.addEventListener("input", () => { l.heures = champ.value; majTotal(); });
+  const pas = (d) => { const v = Math.max(0, Math.min(24, arrondi2((lireNombre(l.heures) || 0) + d))); l.heures = fmtNb(v); champ.value = l.heures; majTotal(); };
+  return h("div", null,
+    h("div", { class: "compteur" },
+      h("button", { type: "button", "aria-label": "Moins une demi-heure", onclick: () => pas(-0.5) }, "−"),
+      champ,
+      h("button", { type: "button", "aria-label": "Plus une demi-heure", onclick: () => pas(0.5) }, "+")),
+    h("div", { class: "raccourcis", style: { marginTop: "8px" } },
+      [4, 8, 9, 10].map((n) => h("button", { type: "button", onclick: () => { l.heures = String(n); champ.value = l.heures; majTotal(); } }, `${n} h`))));
+}
+
+function etapeQuoi(B) {
+  const totalEl = h("b");
+  const majTotal = () => { totalEl.textContent = fmtH(somme(B.lignes, (l) => lireNombre(l.heures) || 0)); };
+  const cartes = B.lignes.map((l, i) => {
+    const info = codeInfo(l.code_cout);
+    const bF = h("button", { type: "button", class: l.facturable ? "actif" : "", onclick: () => { l.facturable = true; bF.classList.add("actif"); bN.classList.remove("actif"); } }, "Facturable");
+    const bN = h("button", { type: "button", class: l.facturable ? "" : "actif", onclick: () => { l.facturable = false; bN.classList.add("actif"); bF.classList.remove("actif"); } }, "Non facturable");
+    const desc = h("textarea", { value: l.note, placeholder: "Qu’as-tu fait ? Ex. pose de gypse au 2e", "aria-label": "Description des travaux" });
+    desc.addEventListener("input", () => { l.note = desc.value; });
+    return h("section", { class: "carte carte-ligne" },
+      h("div", { class: "tete" }, h("span", { class: "etiquette" }, B.lignes.length > 1 ? `Code ${i + 1}` : "Code de coût"),
+        B.lignes.length > 1 ? h("button", { class: "retirer", type: "button", onclick: () => { B.lignes.splice(i, 1); rendre(); } }, "Retirer") : null),
+      h("button", { type: "button", class: "code-btn" + (info ? "" : " vide"), onclick: () => choisirCode(l) },
+        info ? [h("span", { class: "num" }, info.code), h("span", { class: "lib" }, info.libelle), h("span", { class: "muet" }, "›")] : "Choisir un code de coût"),
+      h("div", { class: "etiquette" }, "Heures"),
+      compteur(l, majTotal),
+      h("div", { class: "segment" }, bF, bN),
+      h("div", { class: "etiquette" }, "Description"),
+      desc);
+  });
+  majTotal();
+  const continuer = h("button", { class: "btn primaire", onclick: () => {
+    for (const [i, l] of B.lignes.entries()) {
+      const n = B.lignes.length > 1 ? ` (code ${i + 1})` : "";
+      const v = arrondi2(lireNombre(l.heures));
+      if (!l.code_cout) { toast(`Choisis un code de coût${n}.`, "erreur"); return; }
+      if (!(v > 0 && v <= 24)) { toast(`Entre tes heures${n}.`, "erreur"); return; }
+      if (B.lignes.some((x, j) => j < i && x.code_cout === l.code_cout)) { toast(`Le code ${l.code_cout} est là deux fois. Additionne les heures sur une seule ligne.`, "erreur"); return; }
+      if (!l.note.trim()) { toast(`Décris ce que tu as fait${n}.`, "erreur"); return; }
+    }
+    if (somme(B.lignes, (l) => lireNombre(l.heures)) > 24) { toast("Le total dépasse 24 heures.", "erreur"); return; }
+    S.etape = 3; rendre();
+  } }, "Continuer");
+  return h("div", null,
+    h("main", { class: "contenu avec-barre" },
+      h("div", { class: "ligne" }, h("span", { class: "muet" }, "Chantier :"), h("b", null, nomChantier(B.chantier_id)),
+        h("button", { class: "btn lien", style: { marginLeft: "auto" }, onclick: () => { S.etape = 1; rendre(); } }, "Changer")),
+      h("h2", { class: "question" }, "Qu’est-ce que tu as fait ?"),
+      B.statut === "refuse" ? h("div", { class: "alerte rouge" }, "À corriger", B.motif ? ` : ${B.motif}` : "", ".") : null,
+      B.statut === "approuve" ? h("div", { class: "alerte jaune" }, "Déjà approuvé : si tu modifies, le bureau devra approuver à nouveau.") : null,
+      cartes,
+      h("button", { class: "btn secondaire", onclick: () => { B.lignes.push(nouvelleLigne()); rendre(); setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }), 50); } }, "+ Ajouter un autre code de coût")),
+    h("div", { class: "barre" }, h("div", { class: "barre-in" }, h("div", { class: "tot" }, h("div", { class: "muet petit" }, "Total"), totalEl), continuer)));
+}
+
+function etapeVerifier(B) {
+  const total = somme(B.lignes, (l) => lireNombre(l.heures));
+  const envoyer = h("button", { class: "btn primaire", onclick: (e) => attendre(e.currentTarget, async () => {
+    try {
+      await q(sb.rpc("enregistrer_entree", {
+        p_groupe: B.groupe, p_employe: S.moi.id, p_date: B.date, p_chantier: B.chantier_id, p_note: null,
+        p_lignes: B.lignes.map((l) => ({ code_cout: l.code_cout, heures: arrondi2(lireNombre(l.heures)), facturable: l.facturable, note: l.note.trim() })),
+        p_statut: null, p_motif: null,
+      }));
+      S.dernierEnvoi = { total, chantier: nomChantier(B.chantier_id), date: B.date, modif: Boolean(B.groupe), origine: B.origine };
+      S.recents.chantiers = [B.chantier_id, ...S.recents.chantiers.filter((x) => x !== B.chantier_id)];
+      S.recents.codes = [...new Set([...B.lignes.map((l) => l.code_cout), ...S.recents.codes])].slice(0, 6);
+      S.brouillon = null; aller("succes");
+    } catch (err) { erreur(err); }
+  }) }, B.groupe ? "Enregistrer les changements" : "Envoyer");
+  const supprimer = B.groupe && !B.verrouille ? h("button", { class: "btn danger", onclick: (e) => {
+    const b = e.currentTarget;
+    if (b.dataset.confirme !== "1") { b.dataset.confirme = "1"; b.textContent = "Toucher encore pour supprimer"; return; }
+    attendre(b, async () => {
+      try { await q(sb.from("entrees").delete().in("id", B.ids)); toast("Entrée supprimée."); quitterAssistant(); } catch (err) { erreur(err); }
+    });
+  } }, "Supprimer cette entrée") : null;
+  return h("div", null,
+    h("main", { class: "contenu" + (B.verrouille ? "" : " avec-barre") },
+      h("h2", { class: "question" }, B.verrouille ? "Heures facturées" : "Vérifie et envoie"),
+      B.verrouille ? h("div", { class: "alerte info" }, "Ces heures sont déjà facturées et ne peuvent plus être modifiées. Parle au bureau si une correction est nécessaire.") : null,
+      h("section", { class: "carte resume" },
+        h("dl", null,
+          h("dt", null, "Jour"), h("dd", null, majuscule(dateLongue(versDate(B.date)))),
+          h("dt", null, "Chantier"), h("dd", null, nomChantier(B.chantier_id)),
+          h("dt", null, "Total"), h("dd", null, fmtH(total))),
+        B.lignes.map((l) => h("div", { class: "rl" },
+          h("div", { class: "haut" }, h("span", { class: "lib" }, libelleCode(l.code_cout)), h("span", null, fmtH(lireNombre(l.heures)))),
+          h("div", { class: "bas" }, l.note, l.facturable ? "" : " · non facturable")))),
+      !B.verrouille ? h("button", { class: "btn lien", style: { alignSelf: "center" }, onclick: () => { S.etape = 2; rendre(); } }, "Modifier") : null,
+      supprimer),
+    B.verrouille ? null : h("div", { class: "barre" }, h("div", { class: "barre-in" }, envoyer)));
+}
+
+function choisirCode(ligne) {
+  let fond;
+  const fermer = () => fond && fond.remove();
+  const recherche = h("input", { type: "search", placeholder: "Chercher (ex. gypse, 06 11)", "aria-label": "Chercher un code" });
+  const liste = h("div", { class: "liste" });
+  const bouton = (c) => h("button", { class: "code", onclick: () => { ligne.code_cout = c.code; fermer(); rendre(); } },
+    h("span", { class: "num" }, c.code), h("span", { class: "lib" }, c.libelle, c.description ? h("span", { class: "desc" }, c.description) : null));
+  const sansAccents = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const afficher = () => {
+    const t = sansAccents(recherche.value.trim());
+    const trouves = S.codes.filter((c) => !t || sansAccents(`${c.code} ${c.code.replace(/\s/g, "")} ${c.libelle} ${c.description} ${c.division_libelle}`).includes(t));
+    const blocs = [];
+    if (!t && S.recents.codes.length) blocs.push(h("div", { class: "groupe" }, "Mes codes récents"), S.recents.codes.map((c) => codeInfo(c)).filter(Boolean).map(bouton));
+    let div = null;
+    for (const c of trouves) {
+      if (c.division !== div) { div = c.division; blocs.push(h("div", { class: "groupe" }, `${c.division} — ${c.division_libelle || ""}`)); }
+      blocs.push(bouton(c));
+    }
+    if (!trouves.length) blocs.push(h("p", { class: "muet centre", style: { padding: "24px 0" } }, "Aucun code trouvé."));
+    liste.replaceChildren(...blocs.flat());
+  };
+  recherche.addEventListener("input", afficher);
+  afficher();
+  fond = h("div", { class: "feuille-fond", onclick: (e) => { if (e.target === fond) fermer(); } },
+    h("div", { class: "feuille", role: "dialog", "aria-modal": "true", "aria-label": "Choisir un code de coût" },
+      h("div", { class: "haut" }, h("div", { class: "ligne" }, h("b", null, "Choisir un code de coût"), h("span", { class: "espace" }),
+        h("button", { class: "btn lien", onclick: fermer }, "Fermer")), recherche),
+      liste));
+  document.body.append(fond);
+}
+
+function vueSucces() {
+  const D = S.dernierEnvoi || { total: 0, chantier: "" };
+  return h("div", { class: "ecran" },
+    h("main", { class: "contenu succes" },
+      h("div", { class: "crochet", "aria-hidden": "true" }, "✓"),
+      h("h1", { class: "question" }, D.modif ? "Changements enregistrés" : "Heures envoyées"),
+      h("p", { class: "muet" }, `${fmtH(D.total)} sur ${D.chantier} · ${majuscule(dateLongue(versDate(D.date)))}`),
+      h("button", { class: "btn primaire", onclick: () => aller(D.origine === "jour" ? "jour" : "accueil") }, "Terminé"),
+      h("button", { class: "btn secondaire", onclick: () => nouvelleEntree(D.date) }, "Punch un autre chantier cette journée")));
+}
+
+/* ---------- Démarrage ---------- */
+async function surSession(session) {
+  const avant = S.session && S.session.user.id;
+  S.session = session;
+  if (!session) { S.moi = null; S.vue = "accueil"; rendre(); return; }
+  if (avant === session.user.id && S.moi) return;
+  try {
+    const moi = await q(sb.from("profils").select("*").eq("user_id", session.user.id).maybeSingle());
+    if (!moi || !moi.actif) { await sb.auth.signOut(); toast(moi ? "Ce compte est désactivé." : "Profil introuvable. Avise le bureau.", "erreur"); return; }
+    S.moi = moi;
+    await chargerReferences();
+  } catch (e) { erreur(e); }
+  rendre();
+}
+(function demarrer() {
+  if (!configOK || !sb) { rendre(); return; }
+  sb.auth.onAuthStateChange((ev, session) => setTimeout(() => surSession(session), 0));
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && S.moi && (S.vue === "accueil" || S.vue === "jour") && !document.querySelector(".feuille-fond")) rendre();
+  });
+  if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+})();
+</script>
+</body>
+</html>
