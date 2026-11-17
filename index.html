@@ -1831,6 +1831,7 @@ function gestionChantiers() {
           c.qbo_nom ? h("div", { class: "petit", style: { color: "#1e4e8c" } }, "QuickBooks : ", c.qbo_nom) : null),
         !lieQbo(c) && c.actif ? h("span", { class: "badge soumis" }, "Pas lié à QBO") : null,
         !c.facturable ? h("span", { class: "badge neutre" }, "Non facturable") : null,
+        c.taux_facturation != null ? h("span", { class: "badge admin" }, `${fmtNb(c.taux_facturation)} $/h`) : null,
         !c.actif ? h("span", { class: "badge neutre" }, "Archivé") : null))
         : h("div", { class: "vide" }, "Aucun chantier. Importe ta liste de QuickBooks ou ajoute ton premier chantier.")),
     nbArchives ? h("button", { class: "btn lien", onclick: () => { S.afficherArchives = !S.afficherArchives; rendre(); } },
@@ -1843,6 +1844,9 @@ function formChantier(c) {
   const client = h("input", { type: "text", value: c ? c.client || "" : "" });
   const qboNom = h("input", { type: "text", placeholder: "ex. Dupont:Rénovation cuisine", value: c ? c.qbo_nom || "" : "", disabled: qboConnecte() });
   const adresse = h("input", { type: "text", value: c ? c.adresse || "" : "" });
+  const tauxBase = S.params.taux_facturation != null ? Number(S.params.taux_facturation) : null;
+  const tauxCh = h("input", { type: "text", inputmode: "decimal", placeholder: tauxBase != null ? `Vide = taux de base (${fmtNb(tauxBase)} $)` : "Vide = taux de base",
+    value: c && c.taux_facturation != null ? fmtNb(c.taux_facturation) : "" });
   const facturable = h("input", { type: "checkbox", checked: c ? c.facturable : true });
   const actif = h("input", { type: "checkbox", checked: c ? c.actif : true });
   ouvrirModal((fermer) => ({
@@ -1853,13 +1857,17 @@ function formChantier(c) {
       h("label", { class: "champ" }, h("span", null, "Client/projet dans QuickBooks (nom exact)"), qboNom,
         h("div", { class: "muet petit", style: { marginTop: "4px" } }, qboConnecte() ? "Se choisit dans Gestion › QuickBooks." : "Tel qu’il apparaît dans QuickBooks. Pour un projet ou sous-client : Client:Projet.")),
       h("label", { class: "champ" }, h("span", null, "Adresse"), adresse),
+      h("label", { class: "champ" }, h("span", null, "Taux facturé ($/h) — si différent du taux de base"), tauxCh,
+        h("div", { class: "muet petit", style: { marginTop: "4px" } }, "Pour une soumission à prix négocié. S’applique aux heures envoyées à QuickBooks à partir de maintenant.")),
       h("label", { class: "case" }, facturable, h("span", null, "Heures facturables au client par défaut")),
       nouveau ? null : h("label", { class: "case" }, actif, h("span", null, "Actif (décoche pour archiver un chantier terminé)"))),
     actions: [
       h("button", { class: "btn", onclick: fermer }, "Annuler"),
       h("button", { class: "btn primaire", onclick: (e) => avecAttente(e.currentTarget, async () => {
         if (!nom.value.trim()) { toast("Le nom est requis.", "erreur"); return; }
-        const donnees = { nom: nom.value.trim(), client: client.value.trim() || null, ...(qboConnecte() ? {} : { qbo_nom: qboNom.value.trim() || null }),
+        const tx = tauxCh.value.trim() ? lireNombre(tauxCh.value) : null;
+        if (tx !== null && !(tx >= 0)) { toast("Taux facturé invalide.", "erreur"); return; }
+        const donnees = { taux_facturation: tx === null ? null : arrondi2(tx), nom: nom.value.trim(), client: client.value.trim() || null, ...(qboConnecte() ? {} : { qbo_nom: qboNom.value.trim() || null }),
           adresse: adresse.value.trim() || null, facturable: facturable.checked, actif: nouveau ? true : actif.checked };
         try {
           if (nouveau) await q(sb.from("chantiers").insert(donnees));

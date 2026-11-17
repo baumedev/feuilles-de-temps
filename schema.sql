@@ -558,3 +558,6 @@ create policy absences_gestion on public.absences for all to authenticated
 insert into public.profils (nom, courriel, role)
 select 'Mathieu Fortin', 'm.fortin@advitamcpa.ca', 'comptable'
 where not exists (select 1 from public.profils where lower(courriel) = 'm.fortin@advitamcpa.ca');
+
+-- Taux facturé propre à un chantier (soumission négociée) ; vide = taux de base
+alter table public.chantiers add column if not exists taux_facturation numeric(8,2) check (taux_facturation is null or taux_facturation >= 0);
