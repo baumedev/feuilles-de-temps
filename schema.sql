@@ -496,3 +496,65 @@ as $$
     from public.qbo_connexion c where c.id = 1) end;
 $$;
 grant execute on function public.qbo_statut() to authenticated;
+
+-- =====================================================================
+--  Rôle « comptable » : voit tout (heures, absences, employés, rapports,
+--  exports), ne modifie rien et n'entre pas d'heures.
+-- =====================================================================
+do $$
+declare c text;
+begin
+  for c in select conname from pg_constraint
+           where conrelid = 'public.profils'::regclass and contype = 'c'
+             and pg_get_constraintdef(oid) ilike '%role%'
+  loop
+    execute format('alter table public.profils drop constraint %I', c);
+  end loop;
+end $$;
+alter table public.profils add constraint profils_role_check check (role in ('employe', 'admin', 'comptable'));
+
+create or replace function public.est_lecteur()
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select exists (select 1 from public.profils where user_id = auth.uid() and role in ('admin', 'comptable') and actif);
+$$;
+create or replace function public.est_comptable()
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select exists (select 1 from public.profils where user_id = auth.uid() and role = 'comptable' and actif);
+$$;
+grant execute on function public.est_lecteur() to authenticated;
+grant execute on function public.est_comptable() to authenticated;
+
+drop policy if exists profils_lecture on public.profils;
+create policy profils_lecture on public.profils for select to authenticated
+  using (user_id = auth.uid() or public.est_lecteur());
+
+drop policy if exists entrees_lecture on public.entrees;
+create policy entrees_lecture on public.entrees for select to authenticated
+  using (employe_id = public.mon_profil() or public.est_lecteur());
+drop policy if exists entrees_ajout on public.entrees;
+create policy entrees_ajout on public.entrees for insert to authenticated
+  with check ((employe_id = public.mon_profil() and not public.est_comptable()) or public.est_admin());
+drop policy if exists entrees_modif on public.entrees;
+create policy entrees_modif on public.entrees for update to authenticated
+  using ((employe_id = public.mon_profil() and exporte_qbo_le is null and not public.est_comptable()) or public.est_admin())
+  with check ((employe_id = public.mon_profil() and not public.est_comptable()) or public.est_admin());
+drop policy if exists entrees_suppr on public.entrees;
+create policy entrees_suppr on public.entrees for delete to authenticated
+  using (exporte_qbo_le is null and ((employe_id = public.mon_profil() and not public.est_comptable()) or public.est_admin()));
+
+drop policy if exists absences_lecture on public.absences;
+create policy absences_lecture on public.absences for select to authenticated
+  using (employe_id = public.mon_profil() or public.est_lecteur());
+drop policy if exists absences_gestion on public.absences;
+create policy absences_gestion on public.absences for all to authenticated
+  using ((employe_id = public.mon_profil() and not public.est_comptable()) or public.est_admin())
+  with check ((employe_id = public.mon_profil() and not public.est_comptable()) or public.est_admin());
+
+-- Mathieu Fortin (comptable, Ad Vitam CPA) : il se crée un compte avec ce courriel
+insert into public.profils (nom, courriel, role)
+select 'Mathieu Fortin', 'm.fortin@advitamcpa.ca', 'comptable'
+where not exists (select 1 from public.profils where lower(courriel) = 'm.fortin@advitamcpa.ca');

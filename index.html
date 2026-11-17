@@ -257,6 +257,30 @@ button.badge.abs { cursor: pointer; }
   .rapport-chiffres > div { border: 1px solid #ccc; background: #fff; }
 }
 .raccourcis { display: flex; gap: 6px; margin-top: 8px; }
+
+/* ---------- Calendrier du mois ---------- */
+.cal-filtres { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.cal-filtres select { flex: 1; min-width: 0; border: 1px solid var(--ligne); border-radius: 10px; background: #fff; padding: 9px 10px; min-height: 42px; font-size: 15px; }
+.cal { padding: 8px; }
+.cal-grille { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+.cal-tete { font-size: 11px; font-weight: 700; color: var(--encre-2); text-align: center; padding: 4px 0; text-transform: uppercase; letter-spacing: .03em; }
+.cal-jour { border: 1px solid var(--ligne); border-radius: 8px; background: #fff; min-height: 58px; padding: 4px; display: flex; flex-direction: column; align-items: stretch; gap: 2px; cursor: pointer; text-align: left; font: inherit; color: inherit; min-width: 0; }
+.cal-jour.hors { visibility: hidden; }
+.cal-jour.fds { background: #faf8f3; }
+.cal-jour.auj { outline: 2px solid var(--accent); outline-offset: -1px; }
+.cal-jour.choisi { background: var(--encre); color: #fff; border-color: var(--encre); }
+.cal-jour.choisi .cal-h { color: #fff; }
+.cal-num { font-size: 12px; font-weight: 600; line-height: 1; }
+.cal-h { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--encre); line-height: 1.1; }
+.cal-pts { display: flex; flex-wrap: wrap; gap: 2px; margin-top: auto; }
+.cal-pt { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.cal-abs { font-size: 10px; font-weight: 700; border-radius: 4px; padding: 0 3px; color: #fff; align-self: flex-start; }
+.cal-legende { display: flex; flex-direction: column; gap: 6px; }
+.cal-legende .lg { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.cal-legende .lg .nom { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-legende .lg .barre { height: 6px; border-radius: 3px; }
+.cal-detail .ligne-lecture { padding: 10px 14px; border-top: 1px solid var(--ligne); display: flex; gap: 10px; align-items: flex-start; }
+@media (min-width: 600px) { .cal-jour { min-height: 78px; padding: 6px; } .cal-h { font-size: 15px; } .cal-pt { width: 10px; height: 10px; } }
 .raccourcis button { flex: 1; border: 1px solid var(--ligne); background: #faf8f3; border-radius: 8px; padding: 8px 0; font-weight: 600; cursor: pointer; }
 
 /* ---------- Toast ---------- */
@@ -340,6 +364,7 @@ function icone(nom) {
     rapport: "M4 20V10M10 20V4M16 20v-7M22 20H2",
     paie: "M3 7h18v10H3zM7 12h.01M17 12h.01M12 14.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z",
     gestion: "M4 6h16M4 12h16M4 18h10",
+    calendrier: "M4 5h16v15H4zM4 10h16M9 3v4M15 3v4",
     gauche: "M15 18l-6-6 6-6",
     droite: "M9 18l6-6-6-6",
   };
@@ -519,6 +544,8 @@ const S = {
   derniere: null,
 };
 const estAdmin = () => S.moi && S.moi.role === "admin";
+const estComptable = () => S.moi && S.moi.role === "comptable";
+const estLecteur = () => estAdmin() || estComptable();   // voit les heures de tout le monde
 const nomChantier = (id) => { const c = S.chantiers.find((x) => x.id === id); return c ? c.nom : "Chantier supprimé"; };
 const nomEmploye = (id) => { const p = S.profils.get(id); return p ? p.nom : "—"; };
 const codeInfo = (code) => S.codes.find((c) => c.code === code);
@@ -603,13 +630,15 @@ async function chargerReferences() {
   S.params = params || {};
   S.codes = codes;
   S.derniere = dernieres[0] || null;   // pour pré-remplir chantier et code
-  if (estAdmin()) {
+  if (estLecteur()) {
     const profils = await q(sb.from("profils").select("*").order("nom"));
     S.profils = new Map(profils.map((p) => [p.id, p]));
+  }
+  if (estAdmin()) {
     try { const { data, error } = await sb.rpc("qbo_statut"); S.qboStatut = error ? null : data; } catch (e) { S.qboStatut = null; }
   } else {
-    S.profils = new Map([[S.moi.id, S.moi]]);
   }
+  if (!estLecteur()) S.profils = new Map([[S.moi.id, S.moi]]);
 }
 /* ---------- Connexion directe à QuickBooks (fonction serveur « quickbooks ») ---------- */
 const qboConnecte = () => Boolean(S.qboStatut && S.qboStatut.connecte);
@@ -662,7 +691,7 @@ async function rendre() {
   if (S.aChoisirMdp) { document.body.classList.add("sans-nav"); app.replaceChildren(vueNouveauMdp()); return; }
 
   const main = h("main", { class: "main" }, h("div", { class: "chargement" }, "Chargement…"));
-  const nav = estAdmin() ? navigation() : null;
+  const nav = estLecteur() ? navigation() : null;
   document.body.classList.toggle("sans-nav", !nav);
   app.replaceChildren(entete(), main, nav || "");
   try {
@@ -691,7 +720,11 @@ function entete() {
 }
 
 function navigation() {
-  const items = [
+  const items = estComptable() ? [
+    ["calendrier", "calendrier", "Calendrier"],
+    ["rapports", "rapport", "Rapports"],
+    ["paie", "paie", "Exports"],
+  ] : [
     ["heures", "horloge", "Mes heures"],
     ["approbation", "valider", "Approbation"],
     ["rapports", "rapport", "Rapports"],
@@ -1033,7 +1066,14 @@ function formEntree({ entree, date, employeId }) {
 /* =====================================================================
    Vue : Mes heures
    ===================================================================== */
+function choixModeHeures() {
+  return h("div", { class: "segment", style: { marginBottom: "12px" } },
+    [["semaine", "Semaine"], ["mois", "Mois"]].map(([cle, nom]) =>
+      h("button", { class: (S.modeHeures || "semaine") === cle ? "actif" : "", onclick: () => { S.modeHeures = cle; rendre(); } }, nom)));
+}
+
 async function vueMesHeures() {
+  if (S.modeHeures === "mois") return h("div", null, choixModeHeures(), await vueCalendrier());
   const lundi = S.semaine;
   const jours = [...Array(7)].map((_, i) => ajouterJours(lundi, i));
   const [rangees, absences] = await Promise.all([
@@ -1055,6 +1095,7 @@ async function vueMesHeures() {
   }
 
   return h("div", null,
+    choixModeHeures(),
     navSemaine("semaine"),
     h("div", { class: "carte total-semaine" },
       h("span", { class: "chiffre" }, fmtH(total)),
@@ -1097,6 +1138,134 @@ function ligneEntree(g, avecEmploye) {
       g.statut === "refuse" && g.motif_refus ? h("div", { class: "motif" }, "Motif : ", g.motif_refus) : null),
     badgeStatut(g),
     h("span", { class: "heures" }, fmtH(g.heures)));
+}
+
+/* =====================================================================
+   Vue : Calendrier du mois (où on a travaillé)
+   ===================================================================== */
+const COULEURS_CHANTIERS = ["#c2410c", "#15803d", "#1d4ed8", "#7c3aed", "#0e7490", "#a16207", "#be185d", "#4d7c0f", "#9333ea", "#0f766e", "#b45309", "#475569"];
+function couleurChantier(id) {
+  const ids = S.chantiers.map((c) => c.id).sort((a, b) => String(a).localeCompare(String(b), "fr", { numeric: true }));
+  const i = ids.indexOf(id);
+  return COULEURS_CHANTIERS[(i < 0 ? 0 : i) % COULEURS_CHANTIERS.length];
+}
+const MOIS_LONGS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+const COULEURS_ABSENCE = { maladie: "#7c3aed", conge: "#0e7490", ferie: "#4d5a52" };
+
+async function vueCalendrier() {
+  const auj = new Date();
+  if (!S.mois) S.mois = new Date(auj.getFullYear(), auj.getMonth(), 1);
+  const lecteur = estLecteur();
+  if (!S.calQui) S.calQui = estComptable() ? "tous" : "moi";
+  if (!lecteur) S.calQui = "moi";
+  const debut = S.mois, fin = new Date(debut.getFullYear(), debut.getMonth() + 1, 0);
+  const employeId = S.calQui === "tous" ? null : S.calQui === "moi" ? S.moi.id : S.calQui;
+  const [rangees, absences] = await Promise.all([
+    chargerEntrees({ debut: ymd(debut), fin: ymd(fin), employeId }),
+    chargerAbsences({ debut: ymd(debut), fin: ymd(fin), employeId }),
+  ]);
+  const parJour = new Map();
+  for (const e of rangees) parJour.set(e.date, (parJour.get(e.date) || []).concat(e));
+  const total = somme(rangees, (e) => e.heures);
+  const joursTravailles = parJour.size;
+  const aujCle = ymd(auj);
+  const enCours = debut.getFullYear() === auj.getFullYear() && debut.getMonth() === auj.getMonth();
+  if (!S.calJour || S.calJour.slice(0, 7) !== ymd(debut).slice(0, 7)) S.calJour = enCours ? aujCle : null;
+  const tous = S.calQui === "tous";
+
+  const changerMois = (n) => { S.mois = new Date(debut.getFullYear(), debut.getMonth() + n, 1); S.calJour = null; rendre(); };
+  const nav = h("div", { class: "nav-semaine" },
+    h("button", { class: "btn icone", "aria-label": "Mois précédent", onclick: () => changerMois(-1) }, icone("gauche")),
+    h("div", { class: "etiquette" }, `${MOIS_LONGS[debut.getMonth()].replace(/^./, (c) => c.toUpperCase())} ${debut.getFullYear()}`,
+      h("small", null, enCours ? "Ce mois-ci" : h("button", { class: "btn lien", onclick: () => { S.mois = null; S.calJour = null; rendre(); } }, "Revenir à ce mois-ci"))),
+    h("button", { class: "btn icone", "aria-label": "Mois suivant", onclick: () => changerMois(1) }, icone("droite")));
+
+  const filtre = lecteur ? h("div", { class: "cal-filtres" },
+    h("select", { "aria-label": "Qui", onchange: (ev) => { S.calQui = ev.target.value; rendre(); } },
+      h("option", { value: "tous", selected: S.calQui === "tous" }, "Toute l’équipe"),
+      estComptable() ? null : h("option", { value: "moi", selected: S.calQui === "moi" }, "Moi seulement"),
+      [...S.profils.values()].filter((p) => p.actif && p.role !== "comptable" && p.id !== S.moi.id)
+        .sort((a, b) => a.nom.localeCompare(b.nom, "fr"))
+        .map((p) => h("option", { value: p.id, selected: S.calQui === p.id }, p.nom)))) : null;
+
+  // Grille : semaines du lundi au dimanche
+  const decalage = (debut.getDay() + 6) % 7;
+  const cases = [];
+  for (let i = 0; i < decalage; i++) cases.push(h("div", { class: "cal-jour hors", "aria-hidden": "true" }));
+  for (let j = 1; j <= fin.getDate(); j++) {
+    const d = new Date(debut.getFullYear(), debut.getMonth(), j);
+    const cle = ymd(d);
+    const liste = parJour.get(cle) || [];
+    const heures = somme(liste, (e) => e.heures);
+    const chantiers = [...new Set(liste.map((e) => e.chantier_id))];
+    const abs = absences.filter((a) => a.date === cle);
+    const fds = d.getDay() === 0 || d.getDay() === 6;
+    cases.push(h("button", {
+      class: "cal-jour" + (fds ? " fds" : "") + (cle === aujCle ? " auj" : "") + (S.calJour === cle ? " choisi" : ""),
+      "aria-label": `${dateLongue(d)} : ${heures ? fmtH(heures) : "aucune heure"}`,
+      onclick: () => { S.calJour = cle; rendre(); } },
+      h("span", { class: "cal-num" }, j),
+      heures ? h("span", { class: "cal-h" }, fmtNb(heures)) : null,
+      !tous && abs[0] ? h("span", { class: "cal-abs", style: { background: COULEURS_ABSENCE[abs[0].type] } }, TYPES_ABSENCE[abs[0].type].slice(0, 3)) : null,
+      chantiers.length ? h("span", { class: "cal-pts" }, chantiers.slice(0, 4).map((id) =>
+        h("span", { class: "cal-pt", style: { background: couleurChantier(id) }, title: nomChantier(id) }))) : null));
+  }
+
+  // Légende : heures par chantier ce mois-ci
+  const parChantier = new Map();
+  for (const e of rangees) parChantier.set(e.chantier_id, (parChantier.get(e.chantier_id) || 0) + Number(e.heures));
+  const lignesChantier = [...parChantier.entries()].sort((a, b) => b[1] - a[1]);
+  const max = lignesChantier.length ? lignesChantier[0][1] : 1;
+  const legende = lignesChantier.length ? h("div", { class: "carte" },
+    h("div", { class: "section-titre", style: { marginTop: 0 } }, "Chantiers du mois"),
+    h("div", { class: "cal-legende" }, lignesChantier.map(([id, hrs]) => h("div", { class: "lg" },
+      h("span", { class: "cal-pt", style: { background: couleurChantier(id) } }),
+      h("span", { class: "nom" }, nomChantier(id)),
+      h("span", { class: "barre", style: { width: `${Math.max(6, Math.round(70 * hrs / max))}px`, background: couleurChantier(id) } }),
+      h("span", { class: "gras", style: { fontVariantNumeric: "tabular-nums", minWidth: "56px", textAlign: "right" } }, fmtH(hrs)))))) : null;
+
+  // Détail de la journée choisie
+  let detail = null;
+  if (S.calJour) {
+    const d = versDate(S.calJour);
+    const groupes = grouper(parJour.get(S.calJour) || []);
+    const absJour = absences.filter((a) => a.date === S.calJour);
+    const peutModifier = !estComptable() && S.calQui === "moi";
+    const parEmploye = new Map();
+    for (const g of groupes) parEmploye.set(g.employe_id, (parEmploye.get(g.employe_id) || []).concat(g));
+    const lecture = (g) => h("div", { class: "ligne-lecture" },
+      h("span", { class: "cal-pt", style: { background: couleurChantier(g.chantier_id), marginTop: "6px" } }),
+      h("div", { style: { flex: 1, minWidth: 0 } },
+        h("div", { class: "gras" }, nomChantier(g.chantier_id)),
+        g.lignes.map((l) => h("div", { class: "muet petit" }, libelleCode(l.code_cout),
+          g.lignes.length > 1 ? ` · ${fmtH(l.heures)}` : "", !l.facturable ? " · non fact." : "", l.note ? ` — ${l.note}` : ""))),
+      badgeStatut(g), h("span", { class: "gras", style: { whiteSpace: "nowrap" } }, fmtH(g.heures)));
+    detail = h("section", { class: "carte jour cal-detail" },
+      h("div", { class: "tete" },
+        h("span", { class: "nom" }, dateLongue(d).replace(/^./, (c) => c.toUpperCase())),
+        h("span", { class: "espace" }),
+        groupes.length ? h("span", { class: "gras" }, fmtH(somme(groupes, (g) => g.heures))) : null),
+      absJour.length ? h("div", { class: "absences-ligne" }, absJour.map((a) =>
+        h("span", { class: "badge abs abs-" + a.type }, tous ? `${nomEmploye(a.employe_id)} : ${TYPES_ABSENCE[a.type]}` : TYPES_ABSENCE[a.type]))) : null,
+      groupes.length === 0 ? h("div", { class: "vide", style: { borderTop: "1px solid var(--ligne)" } }, "Aucune heure ce jour-là.") : null,
+      tous || S.calQui !== "moi"
+        ? [...parEmploye.entries()].map(([emp, gs]) => [
+            tous ? h("div", { class: "section-titre", style: { margin: "10px 14px 2px" } }, `${nomEmploye(emp)} · ${fmtH(somme(gs, (g) => g.heures))}`) : null,
+            gs.map(lecture)])
+        : groupes.map((g) => peutModifier ? ligneEntree(g) : lecture(g)),
+      peutModifier ? h("div", { class: "ajouter" }, h("button", { onclick: () => formEntree({ date: d }) }, "+ Ajouter des heures")) : null);
+  }
+
+  return h("div", null,
+    filtre, nav,
+    h("div", { class: "carte total-semaine" },
+      h("span", { class: "chiffre" }, fmtH(total)),
+      h("span", { class: "muet" }, `ce mois-ci · ${joursTravailles} jour${joursTravailles > 1 ? "s" : ""} travaillé${joursTravailles > 1 ? "s" : ""}`)),
+    h("div", { class: "carte cal" },
+      h("div", { class: "cal-grille" },
+        ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((j) => h("div", { class: "cal-tete" }, j)),
+        cases)),
+    detail, legende);
 }
 
 /* =====================================================================
@@ -1490,6 +1659,7 @@ async function vuePaie() {
    Vue : Exports (admin) — Paie Employeur D + Transfert QuickBooks
    ===================================================================== */
 async function vueExports() {
+  if (!estAdmin()) return vuePaie();
   const onglets = [["paie", "Paie (Employeur D)"], ["qbo", "QuickBooks"]];
   const contenu = S.export === "qbo" ? await vueQuickBooks() : await vuePaie();
   return h("div", null,
@@ -1629,6 +1799,7 @@ async function vueQuickBooks() {
    Vue : Gestion (admin)
    ===================================================================== */
 async function vueGestion() {
+  if (!estAdmin()) return h("div", { class: "alerte info" }, "La gestion est réservée aux administrateurs.");
   const onglets = [["chantiers", "Chantiers"], ["codes", "Codes"], ["employes", "Employés"], ["quickbooks", "QuickBooks"], ["parametres", "Paramètres"]];
   const contenu = await (S.gestion === "employes" ? gestionEmployes() : S.gestion === "parametres" ? gestionParametres()
     : S.gestion === "codes" ? gestionCodes() : S.gestion === "quickbooks" ? gestionQuickBooks() : gestionChantiers());
@@ -1886,7 +2057,7 @@ function gestionEmployes() {
         h("div", { class: "gras" }, p.nom),
         h("div", { class: "muet petit" }, `Matricule : ${p.matricule || "—"} · Taux : ${p.taux ? fmtArgent(p.taux) + "/h" : "—"}`),
         p.courriel ? h("div", { class: "muet petit" }, p.courriel) : null),
-      p.role === "admin" ? h("span", { class: "badge admin" }, "Admin") : null,
+      p.role === "admin" ? h("span", { class: "badge admin" }, "Admin") : p.role === "comptable" ? h("span", { class: "badge qbo" }, "Comptable") : null,
       p.actif ? etatCompte(p) : h("span", { class: "badge neutre" }, "Inactif")))),
     h("div", { class: "alerte info" },
       h("b", null, "Pour qu’un employé entre ses heures lui-même : "),
@@ -1903,7 +2074,8 @@ function formEmploye(p) {
   const taux = h("input", { type: "text", inputmode: "decimal", value: p.taux ? fmtNb(p.taux) : "" });
   const role = h("select", { value: p.role, disabled: moi },
     h("option", { value: "employe" }, "Employé — entre ses heures seulement"),
-    h("option", { value: "admin" }, "Administrateur — approuve, rapports, paie"));
+    h("option", { value: "admin" }, "Administrateur — approuve, rapports, paie"),
+    h("option", { value: "comptable" }, "Comptable — voit tout, ne modifie rien"));
   const actif = h("input", { type: "checkbox", checked: p.actif, disabled: moi });
   ouvrirModal((fermer) => ({
     titre: nouveau ? "Ajouter un employé" : p.nom,
@@ -2127,7 +2299,7 @@ function gestionParametres() {
     }) }, "Enregistrer"));
 }
 
-const VUES = { heures: vueMesHeures, approbation: vueApprobation, rapports: vueRapports, paie: vueExports, gestion: vueGestion };
+const VUES = { heures: vueMesHeures, calendrier: vueCalendrier, approbation: vueApprobation, rapports: vueRapports, paie: vueExports, gestion: vueGestion };
 
 /* =====================================================================
    Démarrage
@@ -2145,6 +2317,7 @@ async function surSession(session) {
       return;
     }
     S.moi = moi;
+    if (moi.role === "comptable" && !["calendrier", "rapports", "paie"].includes(S.vue)) S.vue = "calendrier";
     document.querySelectorAll(".toast").forEach((t) => t.remove());
     await chargerReferences();
     await compterEnAttente();
