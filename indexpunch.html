@@ -1,0 +1,2187 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f2a24">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Heures">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icone.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icone-192.png">
+<title>Feuilles de temps</title>
+<style>
+:root {
+  --fond: #f4f1ea;
+  --carte: #ffffff;
+  --encre: #1f2a24;
+  --encre-2: #5b625d;
+  --ligne: #e3ddd1;
+  --accent: #c2410c;
+  --accent-fonce: #9a3412;
+  --accent-pale: #fff1e8;
+  --vert: #15803d;
+  --vert-pale: #e8f5ec;
+  --jaune: #a16207;
+  --jaune-pale: #fdf6dd;
+  --rouge: #b91c1c;
+  --rouge-pale: #fdecec;
+  --rayon: 12px;
+  --ombre: 0 1px 2px rgba(31,42,36,.06), 0 2px 8px rgba(31,42,36,.05);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--fond); color: var(--encre); }
+body {
+  font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  padding-bottom: calc(76px + env(safe-area-inset-bottom));
+}
+body.sans-nav { padding-bottom: 24px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+h1, h2, h3 { margin: 0; line-height: 1.2; }
+
+/* ---------- En-tête ---------- */
+.entete {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--encre); color: #fff;
+  padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+  display: flex; align-items: center; gap: 12px;
+}
+.entete .titre { font-weight: 700; font-size: 17px; flex: 1; letter-spacing: .01em; }
+.entete .qui { font-size: 13px; opacity: .8; }
+.entete button { background: transparent; border: 1px solid rgba(255,255,255,.3); color: #fff; border-radius: 8px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+
+.main { max-width: 760px; margin: 0 auto; padding: 16px; }
+
+/* ---------- Navigation du bas ---------- */
+.nav {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 10;
+  background: var(--carte); border-top: 1px solid var(--ligne);
+  display: flex; justify-content: center;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.nav button {
+  flex: 1; max-width: 150px; background: none; border: 0; cursor: pointer;
+  padding: 9px 4px 10px; font-size: 12px; color: var(--encre-2);
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+}
+.nav button svg { width: 22px; height: 22px; }
+.nav button.actif { color: var(--accent); font-weight: 600; }
+.nav .pastille { background: var(--accent); color: #fff; border-radius: 99px; font-size: 10px; padding: 0 5px; margin-left: 2px; }
+
+/* ---------- Éléments communs ---------- */
+.carte { background: var(--carte); border-radius: var(--rayon); box-shadow: var(--ombre); padding: 14px; margin-bottom: 12px; }
+.ligne-flex { display: flex; align-items: center; gap: 8px; }
+.espace { flex: 1; }
+.muet { color: var(--encre-2); font-size: 14px; }
+.petit { font-size: 13px; }
+.gras { font-weight: 600; }
+.centre { text-align: center; }
+.droite { text-align: right; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: 1px solid var(--ligne); background: var(--carte); color: var(--encre);
+  border-radius: 10px; padding: 10px 14px; font-weight: 600; font-size: 15px;
+  cursor: pointer; min-height: 44px; text-decoration: none;
+}
+.btn:disabled { opacity: .55; cursor: default; }
+.btn.primaire { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primaire:hover:not(:disabled) { background: var(--accent-fonce); }
+.btn.vert { background: var(--vert); border-color: var(--vert); color: #fff; }
+.btn.danger { color: var(--rouge); border-color: #f0c9c9; }
+.btn.petit { min-height: 34px; padding: 5px 10px; font-size: 13px; border-radius: 8px; }
+.btn.lien { border: 0; background: none; color: var(--accent); padding: 6px; min-height: 0; }
+.btn.plein { width: 100%; }
+.btn.icone { width: 40px; min-height: 40px; padding: 0; }
+
+.champ { display: block; margin-bottom: 14px; }
+.champ > span { display: block; font-size: 13px; font-weight: 600; color: var(--encre-2); margin-bottom: 5px; }
+.champ input:not([type=checkbox]), .champ select, .champ textarea {
+  width: 100%; border: 1px solid var(--ligne); border-radius: 10px; background: #fff;
+  padding: 11px 12px; min-height: 46px; font-size: 16px;
+}
+.champ textarea { min-height: 70px; resize: vertical; }
+.champ input:focus, .champ select:focus, .champ textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+.case { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; cursor: pointer; }
+.case input { width: 20px; height: 20px; accent-color: var(--accent); }
+.rangee { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.rangee .champ input { min-width: 0; }
+
+.badge { display: inline-block; font-size: 12px; font-weight: 600; border-radius: 99px; padding: 2px 9px; white-space: nowrap; }
+.badge.soumis { background: var(--jaune-pale); color: var(--jaune); }
+.badge.approuve { background: var(--vert-pale); color: var(--vert); }
+.badge.refuse { background: var(--rouge-pale); color: var(--rouge); }
+.badge.neutre { background: #eee9df; color: var(--encre-2); }
+.badge.admin { background: var(--accent-pale); color: var(--accent-fonce); }
+.badge.qbo { background: #e6eef7; color: #1e4e8c; }
+
+.alerte { border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; font-size: 14px; }
+.alerte.jaune { background: var(--jaune-pale); color: #6b4505; }
+.alerte.rouge { background: var(--rouge-pale); color: #7f1d1d; }
+.alerte.info { background: #eef2f0; color: var(--encre); }
+
+/* ---------- Semaine ---------- */
+.nav-semaine { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.nav-semaine .etiquette { flex: 1; text-align: center; font-weight: 700; }
+.nav-semaine .etiquette small { display: block; font-weight: 400; color: var(--encre-2); font-size: 12px; }
+
+.total-semaine { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 12px; padding: 14px; }
+.total-semaine .chiffre { font-size: 30px; font-weight: 800; letter-spacing: -.02em; white-space: nowrap; }
+
+.jour { padding: 0; overflow: hidden; }
+.jour .tete { display: flex; align-items: center; padding: 11px 14px; gap: 8px; }
+.jour .tete .nom { font-weight: 700; }
+.jour.aujourdhui { outline: 2px solid var(--accent); }
+.jour.fin-semaine .tete { background: #faf8f3; }
+.entree {
+  display: flex; align-items: center; gap: 10px; padding: 11px 14px;
+  border-top: 1px solid var(--ligne); cursor: pointer; background: none; width: 100%; text-align: left; border-left: 0; border-right: 0; border-bottom: 0;
+}
+.entree:hover { background: #fbfaf7; }
+.entree .infos { flex: 1; min-width: 0; }
+.entree .chantier { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entree .note { font-size: 13px; color: var(--encre-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entree .note.code { color: var(--encre); font-size: 13px; font-variant-numeric: tabular-nums; }
+.entree .motif { font-size: 13px; color: var(--rouge); }
+.entree .heures { font-weight: 700; font-variant-numeric: tabular-nums; }
+.ajouter { border-top: 1px dashed var(--ligne); }
+.ajouter button { width: 100%; background: none; border: 0; color: var(--accent); font-weight: 600; padding: 11px; cursor: pointer; font-size: 15px; }
+
+/* ---------- Tableaux ---------- */
+.table-wrap { overflow-x: auto; margin: 0 -14px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { padding: 9px 10px; text-align: left; border-bottom: 1px solid var(--ligne); }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--encre-2); font-weight: 600; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.total td { font-weight: 700; border-bottom: 0; }
+tr.sous td { color: var(--encre-2); font-size: 13px; padding-top: 5px; padding-bottom: 5px; }
+tr.sous td:first-child { padding-left: 30px; }
+
+.onglets { display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; }
+.onglets button { border: 1px solid var(--ligne); background: var(--carte); border-radius: 99px; padding: 7px 14px; font-weight: 600; font-size: 14px; cursor: pointer; white-space: nowrap; }
+.onglets button.actif { background: var(--encre); color: #fff; border-color: var(--encre); }
+.puces { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.puces button { border: 1px solid var(--ligne); background: #fff; border-radius: 99px; padding: 5px 11px; font-size: 13px; cursor: pointer; }
+
+.liste-item { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--ligne); cursor: pointer; }
+.liste-item:first-child { border-top: 0; }
+.liste-item:hover { background: #fbfaf7; }
+.liste-item.inactif { opacity: .55; }
+
+.employe-tete { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
+.employe-tete h3 { font-size: 17px; }
+
+/* ---------- Modale ---------- */
+.modal-fond {
+  position: fixed; inset: 0; z-index: 50; background: rgba(20,24,22,.45);
+  display: flex; align-items: flex-end; justify-content: center;
+  animation: apparait .15s ease-out;
+}
+.modal {
+  background: var(--carte); width: 100%; max-width: 520px; max-height: 92vh; overflow-y: auto;
+  border-radius: 18px 18px 0 0; padding: 20px 18px calc(18px + env(safe-area-inset-bottom));
+  animation: monte .2s ease-out;
+}
+.modal h2 { font-size: 20px; margin-bottom: 16px; }
+.modal-actions { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.modal-actions .btn { flex: 1; }
+@media (min-width: 600px) {
+  .modal-fond { align-items: center; }
+  .modal { border-radius: 18px; }
+}
+@keyframes apparait { from { opacity: 0; } }
+@keyframes monte { from { transform: translateY(30px); opacity: .5; } }
+
+.segment { display: flex; border: 1px solid var(--ligne); border-radius: 10px; overflow: hidden; }
+.segment button { flex: 1; border: 0; background: #fff; padding: 11px 6px; min-height: 46px; font-weight: 600; cursor: pointer; color: var(--encre-2); }
+.segment button + button { border-left: 1px solid var(--ligne); }
+.segment button.actif { background: var(--encre); color: #fff; }
+.segment button:disabled { cursor: default; opacity: .7; }
+.lignes-code { display: flex; flex-direction: column; gap: 10px; }
+.ligne-code { display: flex; flex-direction: column; gap: 6px; }
+.ligne-code.cadre { border: 1px solid var(--ligne); border-radius: 12px; padding: 10px; background: #fcfbf8; }
+.ligne-code select, .ligne-code input { width: 100%; border: 1px solid var(--ligne); border-radius: 10px; background: #fff; padding: 11px 12px; min-height: 46px; font-size: 16px; }
+.ligne-code select:focus, .ligne-code input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+.ligne-code .aide-code:empty { display: none; }
+.ligne-code .lc-bas { display: flex; gap: 8px; align-items: stretch; }
+.ligne-code .lc-bas input { flex: 0 0 96px; width: 96px; }
+.ligne-code .petit-seg { flex: 1; min-width: 0; }
+.ligne-code .petit-seg button { padding: 8px 4px; font-size: 14px; }
+.ligne-code .retirer { flex: 0 0 46px; min-height: 46px; font-size: 22px; color: var(--rouge); }
+.ajout-ligne { align-self: flex-start; padding-left: 0; }
+.total-lignes { font-size: 14px; color: var(--encre-2); text-align: right; }
+.entree .note.code { display: flex; gap: 8px; }
+.entree .ligne-carte + .ligne-carte { margin-top: 4px; }
+.ligne-code textarea { width: 100%; border: 1px solid var(--ligne); border-radius: 10px; background: #fff; padding: 10px 12px; min-height: 64px; font-size: 16px; resize: vertical; }
+.ligne-code textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+.entree .note.code .lib { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entree .note.code .h-ligne { font-variant-numeric: tabular-nums; color: var(--encre-2); white-space: nowrap; }
+.entree .note.code .nf { color: var(--encre-2); white-space: nowrap; font-style: italic; }
+.ajouter-jour { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 0 10px 8px; }
+.ajouter-jour > button { flex: 1 1 100%; }
+.absences-btns { display: flex; gap: 6px; flex: 1 1 100%; justify-content: center; }
+.absences-btns button { border: 1px solid var(--ligne); background: #fff; color: var(--encre-2); border-radius: 99px; padding: 5px 12px; font-size: 13px; font-weight: 600; cursor: pointer; min-height: 32px; }
+.absences-btns button.actif { color: #fff; border-color: transparent; }
+.absences-btns .abs-maladie.actif, .badge.abs-maladie { background: #7c3aed; color: #fff; }
+.absences-btns .abs-conge.actif, .badge.abs-conge { background: #0e7490; color: #fff; }
+.absences-btns .abs-ferie.actif, .badge.abs-ferie { background: #4d5a52; color: #fff; }
+.badge.abs { border: 0; cursor: default; }
+button.badge.abs { cursor: pointer; }
+.absences-ligne { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 10px; }
+.rapport-doc { padding: 18px 16px; }
+.rapport-tete { border-bottom: 2px solid var(--encre); padding-bottom: 12px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 3px; }
+.rapport-tete h2 { font-size: 22px; text-wrap: balance; }
+.rapport-periode { font-weight: 700; margin-top: 6px; }
+.rapport-chiffres { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 6px; }
+.rapport-chiffres > div { background: var(--fond); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.rapport-chiffres span { font-size: 12px; color: var(--encre-2); text-transform: uppercase; letter-spacing: .04em; }
+.rapport-chiffres b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.journal td { vertical-align: top; }
+.journal .date-j { white-space: nowrap; font-weight: 700; }
+.journal .code-j { min-width: 150px; }
+.journal .desc-j { min-width: 180px; }
+.journal tr.debut-jour td { border-top: 1px solid var(--encre-2); }
+.journal tr.sous-total-j td { color: var(--encre-2); font-size: 13px; padding-top: 4px; }
+.tag-nf { color: var(--encre-2); font-style: italic; font-size: 13px; }
+@media print {
+  .entete, .nav, .no-print, .toast, .demo-barre, .modal-fond { display: none !important; }
+  html, body { background: #fff; }
+  body { padding: 0; }
+  .main { max-width: none; padding: 0; }
+  .carte { box-shadow: none; }
+  .rapport-doc { padding: 0; }
+  .table-wrap { overflow: visible; margin: 0; }
+  table { font-size: 11px; }
+  tr { break-inside: avoid; }
+  .rapport-chiffres > div { border: 1px solid #ccc; background: #fff; }
+}
+.raccourcis { display: flex; gap: 6px; margin-top: 8px; }
+.raccourcis button { flex: 1; border: 1px solid var(--ligne); background: #faf8f3; border-radius: 8px; padding: 8px 0; font-weight: 600; cursor: pointer; }
+
+/* ---------- Toast ---------- */
+.toast {
+  position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  background: var(--encre); color: #fff; padding: 10px 16px; border-radius: 10px; z-index: 100;
+  font-size: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.2); max-width: calc(100% - 32px);
+  animation: apparait .15s ease-out;
+}
+.toast.erreur { background: var(--rouge); }
+
+/* ---------- Connexion ---------- */
+.connexion { max-width: 380px; margin: 0 auto; padding: 60px 20px 20px; }
+.connexion .logo { width: 56px; height: 56px; margin-bottom: 16px; }
+.connexion h1 { font-size: 26px; margin-bottom: 6px; }
+.connexion p { margin: 0 0 24px; }
+
+.chargement { text-align: center; color: var(--encre-2); padding: 40px 0; }
+.vide { text-align: center; color: var(--encre-2); padding: 24px 10px; font-size: 14px; }
+.section-titre { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--encre-2); font-weight: 700; margin: 20px 0 8px; }
+</style>
+</head>
+<body>
+<div id="app"><div class="chargement">Chargement…</div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="config.js"></script>
+<script>
+"use strict";
+
+/* =====================================================================
+   CONFIGURATION — dans le fichier config.js (partagé avec l'app punch)
+   ===================================================================== */
+const CONFIG = window.CONFIG || { SUPABASE_URL: "https://VOTRE-PROJET.supabase.co", SUPABASE_ANON_KEY: "VOTRE-CLE-ANON-PUBLIQUE" };
+
+/* Colonnes du fichier d'import Employeur D.
+   À ajuster selon le « Canevas d'importation – Transaction de paie »
+   (Employeur D > Paie > Outils > Importer les transactions > aide).
+   Chaque colonne : titre affiché + fonction qui donne la valeur. */
+const COLONNES_EMPLOYEUR_D = [
+  { titre: "No compagnie",  valeur: (l) => l.noCompagnie },
+  { titre: "Matricule",     valeur: (l) => l.matricule },
+  { titre: "Période",       valeur: (l) => l.periode },      // dernière journée de la période de paie
+  { titre: "Code de gain",  valeur: (l) => l.codeGain },
+  { titre: "Heures",        valeur: (l) => l.heures },
+];
+
+/* =====================================================================
+   Utilitaires
+   ===================================================================== */
+const $ = (sel) => document.querySelector(sel);
+
+// Construit un élément DOM. Le texte passe toujours par des nœuds texte :
+// aucune apostrophe ou caractère spécial ne peut briser le code.
+function h(tag, props, ...enfants) {
+  const el = document.createElement(tag);
+  const proprietes = {};
+  if (props) {
+    for (const [k, v] of Object.entries(props)) {
+      if (v === null || v === undefined || v === false) continue;
+      if (k === "class") el.className = v;
+      else if (k.startsWith("on") && typeof v === "function") el.addEventListener(k.slice(2).toLowerCase(), v);
+      else if (k === "style" && typeof v === "object") Object.assign(el.style, v);
+      else if (k === "value" || k === "checked" || k === "disabled" || k === "selected") proprietes[k] = v;
+      else el.setAttribute(k, v === true ? "" : String(v));
+    }
+  }
+  for (const e of enfants.flat(Infinity)) {
+    if (e === null || e === undefined || e === false) continue;
+    el.append(e instanceof Node ? e : String(e));
+  }
+  for (const [k, v] of Object.entries(proprietes)) el[k] = v;
+  return el;
+}
+
+function icone(nom) {
+  const chemins = {
+    horloge: "M12 7v5l3 2M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z",
+    valider: "M9 12l2 2 4-4M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z",
+    rapport: "M4 20V10M10 20V4M16 20v-7M22 20H2",
+    paie: "M3 7h18v10H3zM7 12h.01M17 12h.01M12 14.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z",
+    gestion: "M4 6h16M4 12h16M4 18h10",
+    gauche: "M15 18l-6-6 6-6",
+    droite: "M9 18l6-6-6-6",
+  };
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  p.setAttribute("d", chemins[nom] || "");
+  svg.append(p);
+  return svg;
+}
+
+/* ---------- Dates (toujours en heure locale, jamais en UTC) ---------- */
+const pad = (n) => String(n).padStart(2, "0");
+const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+function versDate(s) { const [a, m, j] = s.split("-").map(Number); return new Date(a, m - 1, j); }
+function ajouterJours(d, n) { const r = new Date(d.getFullYear(), d.getMonth(), d.getDate()); r.setDate(r.getDate() + n); return r; }
+function lundiDe(d) { const r = new Date(d.getFullYear(), d.getMonth(), d.getDate()); r.setDate(r.getDate() - ((r.getDay() + 6) % 7)); return r; }
+const JOURS = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+const JOURS_COURTS = ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."];
+const MOIS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juill.", "août", "sept.", "oct.", "nov.", "déc."];
+const dateLongue = (d) => `${JOURS[d.getDay()]} ${d.getDate()} ${MOIS[d.getMonth()]}`;
+const dateCourte = (d) => `${JOURS_COURTS[d.getDay()]} ${d.getDate()} ${MOIS[d.getMonth()]}`;
+function etiquetteSemaine(lundi) {
+  const dim = ajouterJours(lundi, 6);
+  const debut = lundi.getMonth() === dim.getMonth() ? `${lundi.getDate()}` : `${lundi.getDate()} ${MOIS[lundi.getMonth()]}`;
+  return `${debut} au ${dim.getDate()} ${MOIS[dim.getMonth()]} ${dim.getFullYear()}`;
+}
+function plages() {
+  const auj = new Date();
+  const lundi = lundiDe(auj);
+  const debutMois = new Date(auj.getFullYear(), auj.getMonth(), 1);
+  return {
+    "Cette semaine": [lundi, ajouterJours(lundi, 6)],
+    "Semaine passée": [ajouterJours(lundi, -7), ajouterJours(lundi, -1)],
+    "2 dernières semaines": [ajouterJours(lundi, -14), ajouterJours(lundi, -1)],
+    "Ce mois-ci": [debutMois, new Date(auj.getFullYear(), auj.getMonth() + 1, 0)],
+    "Mois passé": [new Date(auj.getFullYear(), auj.getMonth() - 1, 1), ajouterJours(debutMois, -1)],
+  };
+}
+
+/* ---------- Nombres ---------- */
+const arrondi2 = (n) => Math.round(n * 100) / 100;
+const fmtH = (n) => `${Number(n || 0).toLocaleString("fr-CA", { maximumFractionDigits: 2 })} h`;
+const fmtNb = (n) => Number(n || 0).toLocaleString("fr-CA", { maximumFractionDigits: 2 });
+const fmtArgent = (n) => Number(n || 0).toLocaleString("fr-CA", { style: "currency", currency: "CAD" });
+const somme = (liste, f) => arrondi2(liste.reduce((s, x) => s + Number(f(x) || 0), 0));
+function lireNombre(txt) {
+  if (txt === null || txt === undefined) return NaN;
+  const s = String(txt).trim().replace(/\s/g, "").replace(",", ".");
+  if (s === "") return NaN;
+  // accepte aussi le format heures:minutes (ex. 7:30)
+  const hm = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (hm) return Number(hm[1]) + Number(hm[2]) / 60;
+  return Number(s);
+}
+
+/* ---------- Messages ---------- */
+function toast(message, type) {
+  document.querySelectorAll(".toast").forEach((t) => t.remove());
+  const t = h("div", { class: "toast" + (type === "erreur" ? " erreur" : ""), role: "status" }, message);
+  document.body.append(t);
+  setTimeout(() => t.remove(), type === "erreur" ? 5000 : 2500);
+}
+function messageErreur(e) {
+  const m = (e && (e.message || e.error_description)) || String(e);
+  if (/Invalid login credentials/i.test(m)) return "Courriel ou mot de passe invalide.";
+  if (/Email not confirmed/i.test(m)) return "Ce compte n’est pas encore confirmé.";
+  if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return "Pas de connexion Internet. Réessaie dans un instant.";
+  if (/row-level security|permission denied/i.test(m)) return "Tu n’as pas la permission de faire ça.";
+  if (/Password should be/i.test(m)) return "Le mot de passe doit contenir au moins 6 caractères.";
+  if (/Database error saving new user|pas autorisé/i.test(m)) return "Ce courriel n’est pas autorisé. Demande au bureau de t’ajouter dans l’app avec ce courriel.";
+  if (/already registered|already been registered/i.test(m)) return "Ce courriel a déjà un compte. Connecte-toi, ou utilise « Mot de passe oublié ? ».";
+  if (/Signups not allowed/i.test(m)) return "La création de compte est désactivée dans Supabase (Authentication > Sign In / Providers > Allow new users to sign up).";
+  if (/profils_courriel|duplicate key/i.test(m)) return "Ce courriel est déjà utilisé par un autre employé.";
+  return m;
+}
+function erreur(e) { console.error(e); toast(messageErreur(e), "erreur"); }
+
+// Désactive le bouton pendant l'opération (évite les doubles clics)
+async function avecAttente(bouton, fn) {
+  if (bouton.disabled) return;
+  const texte = bouton.textContent;
+  bouton.disabled = true;
+  bouton.textContent = "…";
+  try { return await fn(); }
+  finally { bouton.disabled = false; bouton.textContent = texte; }
+}
+
+/* ---------- Modales ---------- */
+function ouvrirModal(construire) {
+  let fond;
+  const fermer = () => { if (fond) fond.remove(); document.removeEventListener("keydown", surTouche); };
+  const surTouche = (e) => { if (e.key === "Escape") fermer(); };
+  const { titre, contenu, actions } = construire(fermer);
+  fond = h("div", { class: "modal-fond", onclick: (e) => { if (e.target === fond) fermer(); } },
+    h("div", { class: "modal", role: "dialog", "aria-modal": "true" },
+      h("h2", null, titre), contenu, h("div", { class: "modal-actions" }, actions)));
+  document.body.append(fond);
+  document.addEventListener("keydown", surTouche);
+  const premier = fond.querySelector("input:not([type=checkbox]), select, textarea");
+  if (premier && window.matchMedia("(min-width: 600px)").matches) premier.focus();
+  return fermer;
+}
+function confirmer(titre, message, libelle = "Confirmer", danger = false) {
+  return new Promise((resoudre) => {
+    ouvrirModal((fermer) => ({
+      titre,
+      contenu: h("p", { class: "muet" }, message),
+      actions: [
+        h("button", { class: "btn", onclick: () => { fermer(); resoudre(false); } }, "Annuler"),
+        h("button", { class: "btn " + (danger ? "danger" : "primaire"), onclick: () => { fermer(); resoudre(true); } }, libelle),
+      ],
+    }));
+  });
+}
+function demanderTexte(titre, etiquette, libelle = "OK") {
+  return new Promise((resoudre) => {
+    const champ = h("textarea", { rows: 3 });
+    ouvrirModal((fermer) => ({
+      titre,
+      contenu: h("label", { class: "champ" }, h("span", null, etiquette), champ),
+      actions: [
+        h("button", { class: "btn", onclick: () => { fermer(); resoudre(null); } }, "Annuler"),
+        h("button", { class: "btn primaire", onclick: () => { fermer(); resoudre(champ.value.trim()); } }, libelle),
+      ],
+    }));
+  });
+}
+
+/* ---------- Fichiers ---------- */
+function telecharger(nom, contenu, type) {
+  const blob = contenu instanceof Blob ? contenu : new Blob([contenu], { type });
+  const url = URL.createObjectURL(blob);
+  const a = h("a", { href: url, download: nom });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function versCSV(lignes) {
+  const cellule = (v) => {
+    if (v === null || v === undefined) return "";
+    const s = typeof v === "number" ? String(v).replace(".", ",") : String(v);
+    return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  return "﻿" + lignes.map((l) => l.map(cellule).join(";")).join("\r\n");
+}
+
+/* =====================================================================
+   État et accès aux données
+   ===================================================================== */
+const S = {
+  session: null,
+  moi: null,
+  profils: new Map(),     // id -> profil
+  chantiers: [],
+  params: {},
+  vue: "heures",
+  semaine: lundiDe(new Date()),
+  semaineAdmin: lundiDe(new Date()),
+  rapportOnglet: "chantier",
+  rc: (() => { const l = lundiDe(new Date()); return { chantierId: null, debut: ymd(ajouterJours(l, -14)), fin: ymd(ajouterJours(l, -1)), tout: false }; })(),
+  rapport: { debut: ymd(new Date(new Date().getFullYear(), new Date().getMonth(), 1)), fin: ymd(new Date()), tout: false, ouverts: new Set() },
+  paie: (() => { const l = lundiDe(new Date()); return { debut: ymd(ajouterJours(l, -7)), fin: ymd(ajouterJours(l, -1)) }; })(),
+  qbo: (() => { const l = lundiDe(new Date()); return { debut: ymd(ajouterJours(l, -7)), fin: ymd(ajouterJours(l, -1)) }; })(),
+  export: "paie",
+  gestion: "chantiers",
+  afficherArchives: false,
+  aChoisirMdp: false,
+  enAttente: 0,
+  codes: [],
+  derniere: null,
+};
+const estAdmin = () => S.moi && S.moi.role === "admin";
+const nomChantier = (id) => { const c = S.chantiers.find((x) => x.id === id); return c ? c.nom : "Chantier supprimé"; };
+const nomEmploye = (id) => { const p = S.profils.get(id); return p ? p.nom : "—"; };
+const codeInfo = (code) => S.codes.find((c) => c.code === code);
+const libelleCode = (code) => { if (!code) return "Sans code"; const c = codeInfo(code); return c ? `${c.code} ${c.libelle}` : code; };
+
+// Liste déroulante des codes de coût, groupés par division
+function selectCodes(valeur, desactive) {
+  const choix = S.codes.filter((c) => c.actif || c.code === valeur);
+  const divisions = [];
+  for (const c of choix) {
+    let d = divisions.find((x) => x.division === c.division);
+    if (!d) divisions.push(d = { division: c.division, libelle: c.division_libelle, codes: [] });
+    d.codes.push(c);
+  }
+  return h("select", { required: true, disabled: desactive, value: valeur || "" },
+    h("option", { value: "" }, "— Choisir un code de coût —"),
+    divisions.map((d) => h("optgroup", { label: `${d.division} — ${d.libelle || ""}` },
+      d.codes.map((c) => h("option", { value: c.code }, `${c.code} — ${c.libelle}`)))));
+}
+
+const configOK = !CONFIG.SUPABASE_URL.includes("VOTRE-PROJET") && !CONFIG.SUPABASE_ANON_KEY.includes("VOTRE-CLE");
+const sb = configOK && window.supabase ? window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY) : null;
+
+async function q(promesse) {
+  const { data, error } = await promesse;
+  if (error) throw error;
+  return data;
+}
+// Récupère toutes les lignes (Supabase limite à 1000 par requête)
+async function toutes(construireRequete) {
+  const resultats = [];
+  for (let de = 0; ; de += 1000) {
+    const page = await q(construireRequete().range(de, de + 999));
+    resultats.push(...page);
+    if (page.length < 1000) return resultats;
+  }
+}
+
+async function chargerEntrees({ debut, fin, employeId, chantierId }) {
+  return toutes(() => {
+    let r = sb.from("entrees").select("*").gte("date", debut).lte("date", fin)
+      .order("date").order("created_at");
+    if (employeId) r = r.eq("employe_id", employeId);
+    if (chantierId) r = r.eq("chantier_id", chantierId);
+    return r;
+  });
+}
+const TYPES_ABSENCE = { maladie: "Maladie", conge: "Congé", ferie: "Férié" };
+async function chargerAbsences({ debut, fin, employeId }) {
+  return toutes(() => {
+    let r = sb.from("absences").select("*").gte("date", debut).lte("date", fin).order("date");
+    if (employeId) r = r.eq("employe_id", employeId);
+    return r;
+  });
+}
+// Bascule l'absence d'une journée : même type = retirer, autre type = changer
+async function basculerAbsence(employeId, date, type, actuelle) {
+  if (actuelle && actuelle.type === type) await q(sb.from("absences").delete().eq("id", actuelle.id));
+  else if (actuelle) await q(sb.from("absences").update({ type }).eq("id", actuelle.id));
+  else await q(sb.from("absences").insert({ employe_id: employeId, date, type }));
+}
+function boutonsAbsence(employeId, date, actuelle) {
+  return h("div", { class: "absences-btns", role: "group", "aria-label": "Journée non travaillée" },
+    Object.entries(TYPES_ABSENCE).map(([type, libelle]) => h("button", {
+      class: "abs-" + type + (actuelle && actuelle.type === type ? " actif" : ""),
+      "aria-pressed": String(Boolean(actuelle && actuelle.type === type)),
+      title: actuelle && actuelle.type === type ? `Retirer « ${libelle} »` : `Marquer la journée : ${libelle}`,
+      onclick: (ev) => avecAttente(ev.currentTarget, async () => {
+        try { await basculerAbsence(employeId, date, type, actuelle); rendre(); } catch (err) { erreur(err); }
+      }) }, libelle)));
+}
+const pastilleAbsence = (a) => a ? h("span", { class: "badge abs abs-" + a.type }, TYPES_ABSENCE[a.type]) : null;
+
+async function chargerReferences() {
+  const [chantiers, params, codes, dernieres] = await Promise.all([
+    q(sb.from("chantiers").select("*").order("nom")),
+    q(sb.from("parametres").select("*").eq("id", 1).maybeSingle()),
+    q(sb.from("codes_cout").select("*").order("ordre").order("code")),
+    q(sb.from("entrees").select("chantier_id, code_cout").eq("employe_id", S.moi.id).order("created_at", { ascending: false }).limit(1)),
+  ]);
+  S.chantiers = chantiers;
+  S.params = params || {};
+  S.codes = codes;
+  S.derniere = dernieres[0] || null;   // pour pré-remplir chantier et code
+  if (estAdmin()) {
+    const profils = await q(sb.from("profils").select("*").order("nom"));
+    S.profils = new Map(profils.map((p) => [p.id, p]));
+    try { const { data, error } = await sb.rpc("qbo_statut"); S.qboStatut = error ? null : data; } catch (e) { S.qboStatut = null; }
+  } else {
+    S.profils = new Map([[S.moi.id, S.moi]]);
+  }
+}
+/* ---------- Connexion directe à QuickBooks (fonction serveur « quickbooks ») ---------- */
+const qboConnecte = () => Boolean(S.qboStatut && S.qboStatut.connecte);
+async function appelQbo(action, extra) {
+  let data, error;
+  try { ({ data, error } = await sb.functions.invoke("quickbooks", { body: { action, ...(extra || {}) } })); }
+  catch (e) { error = e; }
+  if (error) {
+    let msg = error.message || String(error);
+    try { const j = await error.context.json(); if (j && j.erreur) msg = j.erreur; } catch (_) { /* pas de détail */ }
+    if (/Failed to send|Failed to fetch|Load failed|NetworkError|404/i.test(msg)) msg = "La fonction QuickBooks ne répond pas. Vérifie qu’elle est installée dans Supabase (Edge Functions › quickbooks).";
+    throw new Error(msg);
+  }
+  if (data && data.ok === false && data.erreur) throw new Error(data.erreur);
+  return data;
+}
+async function listesQbo(forcer) {
+  if (!S.qboListes || forcer) S.qboListes = await appelQbo("listes");
+  return S.qboListes;
+}
+// Ce qui manque pour envoyer ces entrées (vérifié aussi par la fonction serveur)
+function correspondancesManquantes(entrees) {
+  const manque = new Set();
+  for (const e of entrees) {
+    const p = S.profils.get(e.employe_id) || {};
+    const c = S.chantiers.find((x) => x.id === e.chantier_id) || {};
+    const code = codeInfo(e.code_cout) || {};
+    if (!p.qbo_employee_id) manque.add(`l’employé ${p.nom || "?"}`);
+    if (!c.qbo_customer_id) manque.add(`le chantier ${c.nom || "?"}`);
+    if (!code.qbo_item_id && !S.params.qbo_item_defaut) manque.add("un service QuickBooks par défaut");
+  }
+  return [...manque];
+}
+
+async function compterEnAttente() {
+  if (!estAdmin()) return;
+  const rangees = await toutes(() => sb.from("entrees").select("groupe").eq("statut", "soumis"));
+  S.enAttente = new Set(rangees.map((r) => r.groupe)).size;
+}
+
+/* =====================================================================
+   Rendu général
+   ===================================================================== */
+let numeroRendu = 0;
+async function rendre() {
+  const n = ++numeroRendu;
+  const app = $("#app");
+  if (!configOK) { document.body.classList.add("sans-nav"); app.replaceChildren(vueConfiguration()); return; }
+  if (!S.session || !S.moi) { document.body.classList.add("sans-nav"); app.replaceChildren(S.creerCompte ? vueCreerCompte() : vueConnexion()); return; }
+  if (S.aChoisirMdp) { document.body.classList.add("sans-nav"); app.replaceChildren(vueNouveauMdp()); return; }
+
+  const main = h("main", { class: "main" }, h("div", { class: "chargement" }, "Chargement…"));
+  const nav = estAdmin() ? navigation() : null;
+  document.body.classList.toggle("sans-nav", !nav);
+  app.replaceChildren(entete(), main, nav || "");
+  try {
+    const vue = VUES[S.vue] || VUES.heures;
+    const contenu = await vue();
+    if (n === numeroRendu) main.replaceChildren(contenu);
+  } catch (e) {
+    console.error(e);
+    if (n === numeroRendu) {
+      main.replaceChildren(h("div", { class: "alerte rouge" }, "Erreur : ", messageErreur(e)),
+        h("button", { class: "btn", onclick: rendre }, "Réessayer"));
+    }
+  }
+}
+function allerA(vue) { S.vue = vue; window.scrollTo(0, 0); rendre(); }
+
+function entete() {
+  return h("header", { class: "entete" },
+    h("div", { class: "titre" }, S.params.nom_entreprise || "Feuilles de temps"),
+    h("div", { class: "qui" }, S.moi.nom),
+    h("button", { onclick: async () => {
+      if (await confirmer("Se déconnecter ?", "Tu devras entrer ton courriel et ton mot de passe à nouveau.", "Déconnexion")) {
+        await sb.auth.signOut();
+      }
+    } }, "Quitter"));
+}
+
+function navigation() {
+  const items = [
+    ["heures", "horloge", "Mes heures"],
+    ["approbation", "valider", "Approbation"],
+    ["rapports", "rapport", "Rapports"],
+    ["paie", "paie", "Exports"],
+    ["gestion", "gestion", "Gestion"],
+  ];
+  return h("nav", { class: "nav" }, items.map(([cle, ic, libelle]) =>
+    h("button", { class: S.vue === cle ? "actif" : "", onclick: () => allerA(cle) },
+      icone(ic),
+      h("span", null, libelle, cle === "approbation" && S.enAttente > 0 ? h("span", { class: "pastille" }, S.enAttente) : null))));
+}
+
+function navSemaine(cle) {
+  const lundi = S[cle];
+  const estCetteSemaine = ymd(lundi) === ymd(lundiDe(new Date()));
+  const changer = (d) => { S[cle] = d; rendre(); };
+  return h("div", { class: "nav-semaine" },
+    h("button", { class: "btn icone", "aria-label": "Semaine précédente", onclick: () => changer(ajouterJours(lundi, -7)) }, icone("gauche")),
+    h("div", { class: "etiquette" }, etiquetteSemaine(lundi),
+      h("small", null, estCetteSemaine ? "Cette semaine" : h("button", { class: "btn lien", onclick: () => changer(lundiDe(new Date())) }, "Revenir à cette semaine"))),
+    h("button", { class: "btn icone", "aria-label": "Semaine suivante", onclick: () => changer(ajouterJours(lundi, 7)) }, icone("droite")));
+}
+
+// Accepte une entrée complète (pour afficher « Dans QuickBooks ») ou juste un statut
+function badgeStatut(entreeOuStatut) {
+  const e = typeof entreeOuStatut === "object" ? entreeOuStatut : { statut: entreeOuStatut };
+  if (e.exporte_qbo_le) return h("span", { class: "badge qbo", title: "Transférée dans QuickBooks — verrouillée" }, "🔒 QuickBooks");
+  const libelles = { soumis: "En attente", approuve: "Approuvé", refuse: "Refusé" };
+  return h("span", { class: "badge " + e.statut }, libelles[e.statut] || e.statut);
+}
+const estVerrouillee = (e) => Boolean(e && e.exporte_qbo_le);
+
+/* =====================================================================
+   Connexion
+   ===================================================================== */
+function vueConfiguration() {
+  return h("div", { class: "connexion" },
+    h("h1", null, "Configuration requise"),
+    h("p", { class: "muet" }, "Ouvre le fichier config.js et remplis SUPABASE_URL et SUPABASE_ANON_KEY (Supabase > Project Settings > API)."));
+}
+
+function logo() {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 64 64");
+  svg.setAttribute("class", "logo");
+  svg.innerHTML = '<rect width="64" height="64" rx="14" fill="#1f2a24"/><circle cx="32" cy="32" r="18" fill="none" stroke="#fff" stroke-width="4"/><path d="M32 22v10l7 5" stroke="#c2410c" stroke-width="4" stroke-linecap="round" fill="none"/>';
+  return svg;
+}
+
+function vueConnexion() {
+  const courriel = h("input", { type: "email", autocomplete: "username", inputmode: "email", required: true });
+  const mdp = h("input", { type: "password", autocomplete: "current-password", required: true });
+  const bouton = h("button", { class: "btn primaire plein", type: "submit" }, "Se connecter");
+  const form = h("form", { onsubmit: (e) => {
+    e.preventDefault();
+    avecAttente(bouton, async () => {
+      const { error } = await sb.auth.signInWithPassword({ email: courriel.value.trim(), password: mdp.value });
+      if (error) erreur(error);
+    });
+  } },
+    h("label", { class: "champ" }, h("span", null, "Courriel"), courriel),
+    h("label", { class: "champ" }, h("span", null, "Mot de passe"), mdp),
+    bouton);
+  const oubli = h("button", { class: "btn lien", type: "button", onclick: async () => {
+    const email = courriel.value.trim();
+    if (!email) { toast("Entre d’abord ton courriel."); courriel.focus(); return; }
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+    if (error) erreur(error); else toast("Demande envoyée. Si aucun courriel n’arrive d’ici quelques minutes, demande au bureau de réinitialiser ton compte.");
+  } }, "Mot de passe oublié ?");
+  return h("div", { class: "connexion" }, logo(),
+    h("h1", null, "Feuilles de temps"),
+    h("p", { class: "muet" }, "Connecte-toi pour entrer tes heures."),
+    form, h("div", { class: "centre", style: { marginTop: "14px" } }, oubli),
+    h("div", { class: "centre", style: { marginTop: "18px" } },
+      h("span", { class: "muet petit" }, "Première fois ? "),
+      h("button", { class: "btn lien", type: "button", onclick: () => { S.creerCompte = true; rendre(); } }, "Créer mon compte")));
+}
+
+function vueCreerCompte() {
+  const courriel = h("input", { type: "email", autocomplete: "username", inputmode: "email", required: true });
+  const mdp = h("input", { type: "password", autocomplete: "new-password", minlength: 6, required: true });
+  const mdp2 = h("input", { type: "password", autocomplete: "new-password", minlength: 6, required: true });
+  const bouton = h("button", { class: "btn primaire plein", type: "submit" }, "Créer mon compte");
+  return h("div", { class: "connexion" }, logo(),
+    h("h1", null, "Créer mon compte"),
+    h("p", { class: "muet" }, "Utilise le courriel que le bureau a entré pour toi dans l’app."),
+    h("form", { onsubmit: (e) => {
+      e.preventDefault();
+      if (mdp.value !== mdp2.value) { toast("Les deux mots de passe ne sont pas identiques.", "erreur"); return; }
+      avecAttente(bouton, async () => {
+        const { data, error } = await sb.auth.signUp({ email: courriel.value.trim(), password: mdp.value,
+          options: { emailRedirectTo: location.origin + location.pathname } });
+        if (error) { erreur(error); return; }
+        S.creerCompte = false;
+        if (!data || !data.session) { toast("Compte créé. Ouvre le courriel de confirmation, puis connecte-toi."); rendre(); }
+      });
+    } },
+      h("label", { class: "champ" }, h("span", null, "Courriel"), courriel),
+      h("label", { class: "champ" }, h("span", null, "Mot de passe (6 caractères min.)"), mdp),
+      h("label", { class: "champ" }, h("span", null, "Confirmer le mot de passe"), mdp2),
+      bouton),
+    h("div", { class: "centre", style: { marginTop: "14px" } },
+      h("button", { class: "btn lien", type: "button", onclick: () => { S.creerCompte = false; rendre(); } }, "J’ai déjà un compte")));
+}
+
+function vueNouveauMdp() {
+  const mdp = h("input", { type: "password", autocomplete: "new-password", minlength: 6, required: true });
+  const mdp2 = h("input", { type: "password", autocomplete: "new-password", minlength: 6, required: true });
+  const bouton = h("button", { class: "btn primaire plein", type: "submit" }, "Enregistrer");
+  return h("div", { class: "connexion" }, logo(),
+    h("h1", null, "Choisis ton mot de passe"),
+    h("p", { class: "muet" }, "Tu l’utiliseras pour te connecter à l’app."),
+    h("form", { onsubmit: (e) => {
+      e.preventDefault();
+      if (mdp.value !== mdp2.value) { toast("Les deux mots de passe ne sont pas identiques.", "erreur"); return; }
+      avecAttente(bouton, async () => {
+        const { error } = await sb.auth.updateUser({ password: mdp.value });
+        if (error) { erreur(error); return; }
+        S.aChoisirMdp = false;
+        history.replaceState(null, "", location.pathname);
+        toast("Mot de passe enregistré.");
+        rendre();
+      });
+    } },
+      h("label", { class: "champ" }, h("span", null, "Nouveau mot de passe (6 caractères min.)"), mdp),
+      h("label", { class: "champ" }, h("span", null, "Confirmer"), mdp2),
+      bouton));
+}
+
+/* ---------- Regroupement des lignes d'une même entrée ---------- */
+// Chaque ligne (code de coût + heures) est une rangée dans la base ; les rangées
+// d'une même entrée partagent le même « groupe ». L'app les affiche, les approuve
+// et les verrouille ensemble.
+function grouper(rangees) {
+  const parGroupe = new Map();
+  for (const r of rangees) {
+    const cle = r.groupe || `id-${r.id}`;
+    if (!parGroupe.has(cle)) parGroupe.set(cle, []);
+    parGroupe.get(cle).push(r);
+  }
+  const rang = { refuse: 0, soumis: 1, approuve: 2 };
+  const ordreCode = (code) => { const c = codeInfo(code); return c ? c.ordre : 9999; };
+  return [...parGroupe.values()].map((lignes) => {
+    const p = lignes[0];
+    lignes.sort((a, b) => ordreCode(a.code_cout) - ordreCode(b.code_cout));
+    const verrou = lignes.find((l) => l.exporte_qbo_le);
+    const refus = lignes.find((l) => l.motif_refus);
+    return {
+      groupe: p.groupe || null, employe_id: p.employe_id, date: p.date, chantier_id: p.chantier_id,
+      statut: lignes.map((l) => l.statut).sort((a, b) => rang[a] - rang[b])[0],
+      motif_refus: refus ? refus.motif_refus : null,
+      exporte_qbo_le: verrou ? verrou.exporte_qbo_le : null,
+      lignes, ids: lignes.map((l) => l.id), heures: somme(lignes, (l) => l.heures),
+    };
+  });
+}
+const idsDe = (groupes) => groupes.flatMap((g) => g.ids);
+
+/* =====================================================================
+   Formulaire d'entrée de temps (une entrée = une ou plusieurs lignes)
+   ===================================================================== */
+function formEntree({ entree, date, employeId }) {
+  const admin = estAdmin();
+  const nouveau = !entree;
+  // verrouillée = déjà transférée dans QuickBooks (pour tout le monde, admin compris)
+  const verrouille = estVerrouillee(entree);
+
+  // Nouvelle entrée : on reprend le chantier et le code de la dernière entrée de l'employé
+  const precedent = nouveau && S.derniere ? S.derniere : null;
+  const chantierDepart = entree ? entree.chantier_id
+    : precedent && S.chantiers.some((c) => c.id === precedent.chantier_id && c.actif) ? precedent.chantier_id : "";
+  const codeDepart = precedent && S.codes.some((c) => c.code === precedent.code_cout && c.actif) ? precedent.code_cout : "";
+
+  const choixChantiers = S.chantiers.filter((c) => c.actif || (entree && c.id === entree.chantier_id));
+  const selChantier = h("select", { required: true, disabled: verrouille, value: chantierDepart ? String(chantierDepart) : "" },
+    h("option", { value: "" }, "— Choisir un chantier / projet —"),
+    choixChantiers.map((c) => h("option", { value: String(c.id) }, c.client ? `${c.nom} (${c.client})` : c.nom)));
+  const champDate = h("input", { type: "date", required: true, disabled: verrouille, value: entree ? entree.date : ymd(date || new Date()) });
+  const chantierChoisi = () => S.chantiers.find((x) => String(x.id) === selChantier.value);
+  const factParDefaut = () => { const c = chantierChoisi(); return c ? c.facturable : true; };
+
+  // Lignes : code de coût + heures + facturable
+  const lignes = entree
+    ? entree.lignes.map((l) => ({ code_cout: l.code_cout || "", heures: fmtNb(l.heures), facturable: l.facturable, note: l.note || "" }))
+    : [{ code_cout: codeDepart, heures: "", facturable: factParDefaut(), note: "" }];
+  const zoneLignes = h("div", { class: "lignes-code" });
+  const totalEl = h("div", { class: "total-lignes" });
+  const majTotal = () => {
+    const t = arrondi2(lignes.reduce((s, l) => s + (lireNombre(l.heures) || 0), 0));
+    totalEl.hidden = lignes.length < 2;
+    totalEl.replaceChildren("Total de l’entrée : ", h("b", null, fmtH(t)));
+  };
+
+  function rendreLignes() {
+    const plusieurs = lignes.length > 1;
+    zoneLignes.replaceChildren(
+      ...lignes.map((l, i) => {
+        const sel = selectCodes(l.code_cout, verrouille);
+        sel.setAttribute("aria-label", `Code de coût, ligne ${i + 1}`);
+        const aide = h("div", { class: "muet petit aide-code" });
+        const majAide = () => { const c = codeInfo(sel.value); aide.textContent = c && c.description ? c.description : ""; };
+        sel.addEventListener("change", () => { l.code_cout = sel.value; majAide(); });
+        majAide();
+        const heures = h("input", { type: "text", inputmode: "decimal", placeholder: "Heures", disabled: verrouille, value: l.heures,
+          "aria-label": `Heures, ligne ${i + 1}` });
+        heures.addEventListener("input", () => { l.heures = heures.value; majTotal(); });
+        const bF = h("button", { type: "button", disabled: verrouille }, "Facturable");
+        const bN = h("button", { type: "button", disabled: verrouille }, "Non fact.");
+        const majF = () => { bF.classList.toggle("actif", l.facturable); bN.classList.toggle("actif", !l.facturable);
+          bF.setAttribute("aria-pressed", String(l.facturable)); bN.setAttribute("aria-pressed", String(!l.facturable)); };
+        bF.addEventListener("click", () => { l.facturable = true; majF(); });
+        bN.addEventListener("click", () => { l.facturable = false; majF(); });
+        majF();
+        const retirer = plusieurs && !verrouille ? h("button", { type: "button", class: "btn icone retirer", "aria-label": `Retirer la ligne ${i + 1}`,
+          onclick: () => { lignes.splice(i, 1); rendreLignes(); } }, "×") : null;
+        const desc = h("textarea", { rows: 2, disabled: verrouille, value: l.note, "aria-label": `Description, ligne ${i + 1}`,
+          placeholder: "Description des travaux — ex. pose de gypse au 2e étage" });
+        desc.addEventListener("input", () => { l.note = desc.value; });
+        const raccourcis = !plusieurs && !verrouille ? h("div", { class: "raccourcis" },
+          [4, 8, 9, 10].map((n) => h("button", { type: "button", onclick: () => { l.heures = String(n); heures.value = String(n); majTotal(); } }, `${n} h`))) : null;
+        return h("div", { class: "ligne-code" + (plusieurs ? " cadre" : "") },
+          sel, aide,
+          h("div", { class: "lc-bas" }, heures, h("div", { class: "segment petit-seg" }, bF, bN), retirer),
+          raccourcis, desc);
+      }),
+      verrouille ? null : h("button", { type: "button", class: "btn lien ajout-ligne",
+        onclick: () => { lignes.push({ code_cout: "", heures: "", facturable: factParDefaut(), note: "" }); rendreLignes();
+          const s = zoneLignes.querySelectorAll("select"); if (s.length) s[s.length - 1].focus(); } }, "+ Ajouter un autre code de coût"),
+      totalEl);
+    majTotal();
+  }
+  rendreLignes();
+
+  let selEmploye = null;
+  if (admin && nouveau) {
+    const actifs = [...S.profils.values()].filter((p) => p.actif);
+    selEmploye = h("select", { value: employeId || S.moi.id }, actifs.map((p) => h("option", { value: p.id }, p.nom)));
+  }
+
+  // pour une nouvelle entrée, « facturable » suit le chantier choisi
+  selChantier.addEventListener("change", () => {
+    if (!nouveau) return;
+    lignes.forEach((l) => { l.facturable = factParDefaut(); });
+    rendreLignes();
+  });
+
+  const contenu = h("div", null,
+    verrouille ? h("div", { class: "alerte info" }, admin
+      ? "Ces heures sont dans QuickBooks pour la facturation. Pour les corriger, annule d’abord le transfert (et ajuste-les aussi dans QuickBooks)."
+      : "Ces heures ont été transférées dans QuickBooks pour la facturation et ne peuvent plus être modifiées. Demande au bureau si une correction est nécessaire.") : null,
+    !admin && !verrouille && entree && entree.statut === "approuve" ? h("div", { class: "alerte jaune" }, "Ces heures sont déjà approuvées. Si tu les modifies, elles retourneront en attente d’approbation.") : null,
+    entree && entree.statut === "refuse" ? h("div", { class: "alerte rouge" }, "Refusé", entree.motif_refus ? ` : ${entree.motif_refus}` : "", ". Corrige puis enregistre pour renvoyer.") : null,
+    selEmploye ? h("label", { class: "champ" }, h("span", null, "Employé"), selEmploye) : null,
+    admin && !nouveau ? h("p", { class: "muet" }, "Employé : ", h("b", null, nomEmploye(entree.employe_id)), " · ", badgeStatut(entree)) : null,
+    h("label", { class: "champ" }, h("span", null, "Date"), champDate),
+    h("label", { class: "champ" }, h("span", null, "Chantier / projet"), selChantier),
+    h("div", { class: "champ" }, h("span", null, "Code de coût, heures et description"), zoneLignes));
+
+  ouvrirModal((fermer) => {
+    const enregistrer = h("button", { class: "btn primaire", onclick: (e) => avecAttente(e.currentTarget, async () => {
+      if (!champDate.value) { toast("Choisis une date.", "erreur"); return; }
+      if (!selChantier.value) { toast("Choisis un chantier.", "erreur"); return; }
+      const propres = [];
+      for (const [i, l] of lignes.entries()) {
+        const num = lignes.length > 1 ? ` (ligne ${i + 1})` : "";
+        const hrs = arrondi2(lireNombre(l.heures));
+        if (!l.code_cout) { toast(`Choisis un code de coût${num}.`, "erreur"); return; }
+        if (!(hrs > 0 && hrs <= 24)) { toast(`Entre un nombre d’heures entre 0 et 24${num}.`, "erreur"); return; }
+        if (propres.some((x) => x.code_cout === l.code_cout)) { toast(`Le code ${l.code_cout} est déjà dans cette entrée. Additionne les heures sur une seule ligne.`, "erreur"); return; }
+        if (!(l.note || "").trim()) {
+          toast(`Décris brièvement les travaux faits${num}.`, "erreur");
+          const zones = zoneLignes.querySelectorAll("textarea"); if (zones[i]) zones[i].focus();
+          return;
+        }
+        propres.push({ code_cout: l.code_cout, heures: hrs, facturable: l.facturable, note: l.note.trim() });
+      }
+      if (somme(propres, (l) => l.heures) > 24) { toast("Le total de l’entrée dépasse 24 heures.", "erreur"); return; }
+      const employe = nouveau ? (selEmploye ? selEmploye.value : S.moi.id) : entree.employe_id;
+      try {
+        await q(sb.rpc("enregistrer_entree", {
+          p_groupe: nouveau ? null : entree.groupe,
+          p_employe: employe,
+          p_date: champDate.value,
+          p_chantier: Number(selChantier.value),
+          p_note: null,
+          p_lignes: propres,
+          // les heures ajoutées par un admin sont approuvées d'emblée ; une modification garde le statut
+          p_statut: admin ? (nouveau ? "approuve" : entree.statut) : null,
+          p_motif: admin && !nouveau ? entree.motif_refus : null,
+        }));
+        if (employe === S.moi.id) S.derniere = { chantier_id: Number(selChantier.value), code_cout: propres[0].code_cout };
+        fermer();
+        toast(nouveau ? "Heures ajoutées." : "Modifications enregistrées.");
+        await compterEnAttente();
+        rendre();
+      } catch (err) { erreur(err); }
+    }) }, "Enregistrer");
+
+    const supprimer = !nouveau && !verrouille ? h("button", { class: "btn danger", onclick: async () => {
+      if (!(await confirmer("Supprimer cette entrée ?", `${fmtH(entree.heures)} le ${dateLongue(versDate(entree.date))} sur ${nomChantier(entree.chantier_id)}${entree.lignes.length > 1 ? ` (${entree.lignes.length} codes de coût)` : ""}.`, "Supprimer", true))) return;
+      try {
+        await q(sb.from("entrees").delete().in("id", entree.ids));
+        fermer();
+        toast("Entrée supprimée.");
+        await compterEnAttente();
+        rendre();
+      } catch (err) { erreur(err); }
+    } }, "Supprimer") : null;
+
+    const annulerTransfert = verrouille && admin ? h("button", { class: "btn danger", onclick: async () => {
+      if (!(await confirmer("Annuler le transfert QuickBooks ?",
+        entree.lignes.some((l) => l.qbo_time_activity_id)
+          ? "Ces heures seront retirées de QuickBooks et redeviendront modifiables dans l’app. Impossible si elles sont déjà sur une facture : retire-les d’abord de la facture."
+          : "Ces heures redeviendront modifiables dans l’app. L’app ne touche pas à QuickBooks : si les heures ou la facture doivent changer, corrige-les aussi là-bas.",
+        "Annuler le transfert", true))) return;
+      try {
+        const envoyeeDirect = entree.lignes.some((l) => l.qbo_time_activity_id);
+        if (envoyeeDirect) {
+          const r = await appelQbo("annuler", { ids: entree.ids });
+          if (r.erreurs && r.erreurs.length) { toast(r.erreurs[0].message, "erreur"); fermer(); rendre(); return; }
+        } else {
+          await q(sb.from("entrees").update({ exporte_qbo_le: null }).in("id", entree.ids));
+        }
+        fermer();
+        toast(envoyeeDirect ? "Heures retirées de QuickBooks. Elles sont de nouveau modifiables." : "Transfert annulé. Les heures sont de nouveau modifiables.");
+        rendre();
+      } catch (err) { erreur(err); }
+    } }, "Annuler le transfert") : null;
+
+    return {
+      titre: nouveau ? "Ajouter des heures" : verrouille ? "Heures dans QuickBooks" : "Modifier les heures",
+      contenu,
+      actions: verrouille ? [annulerTransfert, h("button", { class: "btn", onclick: fermer }, "Fermer")]
+        : [supprimer, h("button", { class: "btn", onclick: fermer }, "Annuler"), enregistrer],
+    };
+  });
+}
+
+/* =====================================================================
+   Vue : Mes heures
+   ===================================================================== */
+async function vueMesHeures() {
+  const lundi = S.semaine;
+  const jours = [...Array(7)].map((_, i) => ajouterJours(lundi, i));
+  const [rangees, absences] = await Promise.all([
+    chargerEntrees({ debut: ymd(lundi), fin: ymd(jours[6]), employeId: S.moi.id }),
+    chargerAbsences({ debut: ymd(lundi), fin: ymd(jours[6]), employeId: S.moi.id }),
+  ]);
+  const groupes = grouper(rangees);
+  const aujourdhui = ymd(new Date());
+  const total = somme(rangees, (e) => e.heures);
+  const refusees = groupes.filter((g) => g.statut === "refuse").length;
+  const attente = groupes.filter((g) => g.statut === "soumis").length;
+  const approuvees = groupes.filter((g) => g.statut === "approuve").length;
+
+  if (!S.chantiers.some((c) => c.actif)) {
+    return h("div", null, navSemaine("semaine"),
+      h("div", { class: "alerte jaune" }, estAdmin()
+        ? "Aucun chantier actif. Ajoute tes chantiers dans Gestion > Chantiers avant d’entrer des heures."
+        : "Aucun chantier n’est configuré pour l’instant. Avise le bureau."));
+  }
+
+  return h("div", null,
+    navSemaine("semaine"),
+    h("div", { class: "carte total-semaine" },
+      h("span", { class: "chiffre" }, fmtH(total)),
+      h("span", { class: "muet" }, "cette semaine"),
+      h("span", { class: "espace" }),
+      approuvees ? h("span", { class: "badge approuve" }, `${approuvees} approuvée${approuvees > 1 ? "s" : ""}`) : null,
+      attente ? h("span", { class: "badge soumis" }, `${attente} en attente`) : null),
+    refusees ? h("div", { class: "alerte rouge" }, `${refusees} entrée${refusees > 1 ? "s ont été refusées" : " a été refusée"}. Touche-la pour voir pourquoi et la corriger.`) : null,
+    jours.map((jour) => {
+      const cle = ymd(jour);
+      const duJour = groupes.filter((g) => g.date === cle);
+      const absence = absences.find((a) => a.date === cle);
+      const fds = jour.getDay() === 0 || jour.getDay() === 6;
+      return h("section", { class: "carte jour" + (cle === aujourdhui ? " aujourdhui" : "") + (fds ? " fin-semaine" : "") },
+        h("div", { class: "tete" },
+          h("span", { class: "nom" }, dateLongue(jour).replace(/^./, (c) => c.toUpperCase())),
+          pastilleAbsence(absence),
+          h("span", { class: "espace" }),
+          duJour.length ? h("span", { class: "gras" }, fmtH(somme(duJour, (g) => g.heures))) : h("span", { class: "muet petit" }, fds || absence ? "" : "Aucune heure")),
+        duJour.map((g) => ligneEntree(g)),
+        h("div", { class: "ajouter ajouter-jour" },
+          h("button", { onclick: () => formEntree({ date: jour }) }, "+ Ajouter des heures"),
+          boutonsAbsence(S.moi.id, cle, absence)));
+    }));
+}
+
+// Une entrée (groupe) dans une liste : chantier, lignes de codes, description
+function ligneEntree(g, avecEmploye) {
+  const plusieurs = g.lignes.length > 1;
+  return h("button", { class: "entree", onclick: () => formEntree({ entree: g }) },
+    h("div", { class: "infos" },
+      h("div", { class: "chantier" }, nomChantier(g.chantier_id)),
+      avecEmploye ? h("div", { class: "note" }, dateCourte(versDate(g.date))) : null,
+      g.lignes.map((l) => h("div", { class: "ligne-carte" },
+        h("div", { class: "note code" },
+          h("span", { class: "lib" }, libelleCode(l.code_cout)),
+          plusieurs ? h("span", { class: "h-ligne" }, fmtH(l.heures)) : null,
+          !l.facturable ? h("span", { class: "nf" }, "non fact.") : null),
+        l.note ? h("div", { class: "note" }, l.note) : null)),
+      g.statut === "refuse" && g.motif_refus ? h("div", { class: "motif" }, "Motif : ", g.motif_refus) : null),
+    badgeStatut(g),
+    h("span", { class: "heures" }, fmtH(g.heures)));
+}
+
+/* =====================================================================
+   Vue : Approbation (admin)
+   ===================================================================== */
+async function changerStatut(ids, statut, motif) {
+  if (!ids.length) return;
+  const donnees = { statut, motif_refus: statut === "refuse" ? motif || null : null };
+  await q(sb.from("entrees").update(donnees).in("id", ids));
+  await compterEnAttente();
+}
+
+async function vueApprobation() {
+  const lundi = S.semaineAdmin;
+  const [rangees, absencesSemaine] = await Promise.all([
+    chargerEntrees({ debut: ymd(lundi), fin: ymd(ajouterJours(lundi, 6)) }),
+    chargerAbsences({ debut: ymd(lundi), fin: ymd(ajouterJours(lundi, 6)) }),
+  ]);
+  const parEmploye = new Map();
+  for (const p of S.profils.values()) if (p.actif) parEmploye.set(p.id, []);
+  for (const e of rangees) {
+    if (!parEmploye.has(e.employe_id)) parEmploye.set(e.employe_id, []);
+    parEmploye.get(e.employe_id).push(e);
+  }
+  const enAttente = grouper(rangees).filter((g) => g.statut === "soumis");
+
+  const toutApprouver = enAttente.length ? h("button", { class: "btn vert plein", style: { marginBottom: "12px" }, onclick: (ev) => avecAttente(ev.currentTarget, async () => {
+    if (!(await confirmer("Tout approuver ?", `${enAttente.length} entrée${enAttente.length > 1 ? "s" : ""} en attente pour la semaine du ${etiquetteSemaine(lundi)}.`, "Approuver tout"))) return;
+    try { await changerStatut(idsDe(enAttente), "approuve"); toast("Semaine approuvée."); rendre(); } catch (err) { erreur(err); }
+  }) }, `Approuver toute la semaine (${enAttente.length})`) : null;
+
+  const cartes = [...parEmploye.entries()]
+    .sort((a, b) => nomEmploye(a[0]).localeCompare(nomEmploye(b[0]), "fr"))
+    .map(([id, liste]) => {
+      const groupes = grouper(liste);
+      const attente = groupes.filter((g) => g.statut === "soumis");
+      const sesAbsences = absencesSemaine.filter((a) => a.employe_id === id);
+      return h("section", { class: "carte jour" },
+        h("div", { class: "tete" },
+          h("span", { class: "nom" }, nomEmploye(id)),
+          attente.length ? h("span", { class: "badge soumis" }, `${attente.length} en attente`) : null,
+          h("span", { class: "espace" }),
+          h("span", { class: "gras" }, fmtH(somme(liste, (e) => e.heures)))),
+        sesAbsences.length ? h("div", { class: "absences-ligne" }, sesAbsences.map((a) =>
+          h("button", { class: "badge abs abs-" + a.type, title: "Changer ou retirer", onclick: () => formAbsence(id, a.date, a) },
+            `${TYPES_ABSENCE[a.type]} · ${dateCourte(versDate(a.date))}`))) : null,
+        groupes.length ? groupes.map((g) => h("div", { class: "ligne-flex", style: { borderTop: "1px solid var(--ligne)" } },
+          h("div", { style: { flex: "1", minWidth: "0" } }, (() => { const l = ligneEntree(g, true); l.style.borderTop = "0"; return l; })()),
+          estVerrouillee(g) ? h("span", { style: { width: "10px" } }) : null,
+          !estVerrouillee(g) && g.statut !== "approuve" ? h("button", { class: "btn petit vert", title: "Approuver", onclick: (ev) => avecAttente(ev.currentTarget, async () => {
+            try { await changerStatut(g.ids, "approuve"); rendre(); } catch (err) { erreur(err); }
+          }) }, "✓") : null,
+          estVerrouillee(g) ? null : g.statut !== "refuse" ? h("button", { class: "btn petit danger", title: "Refuser", style: { marginRight: "10px" }, onclick: async () => {
+            const motif = await demanderTexte("Refuser ces heures", "Motif (l’employé le verra)", "Refuser");
+            if (motif === null) return;
+            try { await changerStatut(g.ids, "refuse", motif); toast("Entrée refusée."); rendre(); } catch (err) { erreur(err); }
+          } }, "✗") : h("span", { style: { width: "10px" } })))
+          : h("div", { class: "vide", style: { borderTop: "1px solid var(--ligne)" } }, "Aucune heure entrée cette semaine."),
+        h("div", { class: "ajouter" },
+          attente.length ? h("button", { style: { color: "var(--vert)" }, onclick: (ev) => avecAttente(ev.currentTarget, async () => {
+            try { await changerStatut(idsDe(attente), "approuve"); toast(`Heures de ${nomEmploye(id)} approuvées.`); rendre(); } catch (err) { erreur(err); }
+          }) }, attente.length > 1 ? `✓ Approuver les ${attente.length} entrées de ${nomEmploye(id)}` : `✓ Approuver l’entrée de ${nomEmploye(id)}`) : null,
+          h("button", { onclick: () => formEntree({ date: lundi, employeId: id }) }, "+ Ajouter des heures pour " + nomEmploye(id)),
+          h("button", { class: "muet", onclick: () => formAbsence(id, ymd(lundi)) }, "Marquer une journée non travaillée")));
+    });
+
+  return h("div", null, navSemaine("semaineAdmin"), toutApprouver,
+    !enAttente.length && rangees.length ? h("div", { class: "alerte info" }, "Tout est approuvé pour cette semaine.") : null,
+    cartes);
+}
+
+// Le bureau marque une absence pour un employé (choix de la date et du type)
+function formAbsence(employeId, dateDepart, actuelle) {
+  const champDate = h("input", { type: "date", value: dateDepart, disabled: Boolean(actuelle) });
+  let type = actuelle ? actuelle.type : "maladie";
+  const boutons = Object.entries(TYPES_ABSENCE).map(([t, lib]) => h("button", { type: "button", "data-type": t, class: t === type ? "actif" : "",
+    onclick: () => { type = t; boutons.forEach((b) => b.classList.toggle("actif", b.dataset.type === t)); } }, lib));
+  ouvrirModal((fermer) => ({
+    titre: `${nomEmploye(employeId)} — journée non travaillée`,
+    contenu: h("div", null,
+      h("label", { class: "champ" }, h("span", null, "Date"), champDate),
+      h("div", { class: "champ" }, h("span", null, "Raison"), h("div", { class: "segment" }, boutons)),
+      h("p", { class: "muet petit" }, "C’est seulement un repère : aucune heure n’est ajoutée à la paie ni à QuickBooks.")),
+    actions: [
+      actuelle ? h("button", { class: "btn danger", onclick: (e) => avecAttente(e.currentTarget, async () => {
+        try { await q(sb.from("absences").delete().eq("id", actuelle.id)); fermer(); rendre(); } catch (err) { erreur(err); }
+      }) }, "Retirer") : null,
+      h("button", { class: "btn", onclick: fermer }, "Annuler"),
+      h("button", { class: "btn primaire", onclick: (e) => avecAttente(e.currentTarget, async () => {
+        if (!champDate.value) { toast("Choisis une date.", "erreur"); return; }
+        try {
+          if (actuelle) await q(sb.from("absences").update({ type }).eq("id", actuelle.id));
+          else {
+            const existe = (await chargerAbsences({ debut: champDate.value, fin: champDate.value, employeId }))[0];
+            if (existe) await q(sb.from("absences").update({ type }).eq("id", existe.id));
+            else await q(sb.from("absences").insert({ employe_id: employeId, date: champDate.value, type }));
+          }
+          fermer(); toast("Journée marquée."); rendre();
+        } catch (err) { erreur(err); }
+      }) }, "Enregistrer"),
+    ],
+  }));
+}
+
+/* =====================================================================
+   Vue : Rapports par chantier (admin)
+   ===================================================================== */
+function selecteurPeriode(etat, apresChangement) {
+  const debut = h("input", { type: "date", value: etat.debut, onchange: (e) => { etat.debut = e.target.value; apresChangement(); } });
+  const fin = h("input", { type: "date", value: etat.fin, onchange: (e) => { etat.fin = e.target.value; apresChangement(); } });
+  return h("div", null,
+    h("div", { class: "puces" }, Object.entries(plages()).map(([nom, [d, f]]) =>
+      h("button", { onclick: () => { etat.debut = ymd(d); etat.fin = ymd(f); apresChangement(); } }, nom))),
+    h("div", { class: "rangee" },
+      h("label", { class: "champ" }, h("span", null, "Du"), debut),
+      h("label", { class: "champ" }, h("span", null, "Au"), fin)));
+}
+
+async function vueRapports() {
+  const onglets = [["chantier", "Par chantier"], ["sommaire", "Tous les chantiers"]];
+  const contenu = S.rapportOnglet === "sommaire" ? await vueSommaire() : await vueRapportChantier();
+  return h("div", null,
+    h("div", { class: "onglets no-print" }, onglets.map(([cle, nom]) =>
+      h("button", { class: S.rapportOnglet === cle ? "actif" : "", onclick: () => { S.rapportOnglet = cle; rendre(); } }, nom))),
+    contenu);
+}
+
+const dateTexte = (s) => { const d = versDate(s); return `${d.getDate()} ${MOIS[d.getMonth()]} ${d.getFullYear()}`; };
+
+// Rapport d'un chantier pour une période (ex. un cycle de facturation) : qui a fait quoi
+async function vueRapportChantier() {
+  const RC = S.rc;
+  const choix = [...S.chantiers].sort((a, b) => (b.actif - a.actif) || a.nom.localeCompare(b.nom, "fr"));
+  if (!choix.length) return h("div", { class: "vide" }, "Aucun chantier. Ajoute tes chantiers dans Gestion > Chantiers.");
+  if (!choix.some((c) => c.id === RC.chantierId)) RC.chantierId = choix[0].id;
+  const c = choix.find((x) => x.id === RC.chantierId);
+  const taux = (id) => Number((S.profils.get(id) || {}).taux || 0);
+
+  const brutes = await chargerEntrees({ debut: RC.debut, fin: RC.fin, chantierId: c.id });
+  const entrees = brutes.filter((e) => RC.tout ? e.statut !== "refuse" : e.statut === "approuve");
+  const enAttente = grouper(brutes.filter((e) => e.statut === "soumis")).length;
+  const tot = {
+    heures: somme(entrees, (e) => e.heures),
+    fact: somme(entrees.filter((e) => e.facturable), (e) => e.heures),
+    cout: somme(entrees, (e) => e.heures * taux(e.employe_id)),
+  };
+  const regrouper = (cle) => {
+    const m = new Map();
+    for (const e of entrees) m.set(cle(e), (m.get(cle(e)) || []).concat(e));
+    return m;
+  };
+  const ordreCode = (code) => { const x = codeInfo(code); return x ? x.ordre : 9999; };
+  const parCode = [...regrouper((e) => e.code_cout || "").entries()].sort((a, b) => ordreCode(a[0]) - ordreCode(b[0]));
+  const parEmp = [...regrouper((e) => e.employe_id).entries()].sort((a, b) => nomEmploye(a[0]).localeCompare(nomEmploye(b[0]), "fr"));
+  const ligneTotaux = (libelle, liste) => h("tr", null,
+    h("td", null, libelle),
+    h("td", { class: "num" }, fmtNb(somme(liste, (e) => e.heures))),
+    h("td", { class: "num" }, fmtNb(somme(liste.filter((e) => e.facturable), (e) => e.heures))),
+    h("td", { class: "num" }, fmtArgent(somme(liste, (e) => e.heures * taux(e.employe_id)))));
+  const tableTotaux = (titre, col, lignes) => h("div", { class: "table-wrap" }, h("table", null,
+    h("thead", null, h("tr", null, h("th", null, col), h("th", { class: "num" }, "Heures"), h("th", { class: "num" }, "Factur."), h("th", { class: "num" }, "Coût m.-o."))),
+    h("tbody", null, lignes, h("tr", { class: "total" }, h("td", null, "Total"),
+      h("td", { class: "num" }, fmtNb(tot.heures)), h("td", { class: "num" }, fmtNb(tot.fact)), h("td", { class: "num" }, fmtArgent(tot.cout))))));
+
+  // Journal : jour par jour, qui a fait quoi
+  const jours = [...regrouper((e) => e.date).entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const corpsJournal = [];
+  for (const [date, liste] of jours) {
+    liste.sort((a, b) => nomEmploye(a.employe_id).localeCompare(nomEmploye(b.employe_id), "fr") || ordreCode(a.code_cout) - ordreCode(b.code_cout));
+    liste.forEach((e, i) => corpsJournal.push(h("tr", { class: i === 0 ? "debut-jour" : "" },
+      h("td", { class: "date-j" }, i === 0 ? dateCourte(versDate(date)) : ""),
+      h("td", null, nomEmploye(e.employe_id)),
+      h("td", { class: "code-j" }, libelleCode(e.code_cout)),
+      h("td", { class: "desc-j" }, e.note || "",
+        !e.facturable ? h("span", { class: "tag-nf" }, " non fact.") : null,
+        e.statut === "soumis" ? h("span", { class: "badge soumis", style: { marginLeft: "6px" } }, "En attente") : null),
+      h("td", { class: "num" }, fmtNb(e.heures)))));
+    corpsJournal.push(h("tr", { class: "sous-total-j" }, h("td"), h("td", { colspan: "3" }, `Total du ${dateCourte(versDate(date))}`), h("td", { class: "num" }, fmtNb(somme(liste, (e) => e.heures)))));
+  }
+
+  const exporter = () => {
+    const rangees = [["Chantier", "Client/projet QuickBooks", "Date", "Employé", "Code de coût", "Libellé du code", "Description", "Heures", "Facturable", "Statut"]];
+    for (const [, liste] of jours) for (const e of liste) {
+      const cc = codeInfo(e.code_cout) || {};
+      rangees.push([c.nom, nomQuickBooks(c), e.date, nomEmploye(e.employe_id), e.code_cout || "", cc.libelle || "", e.note || "", Number(e.heures), e.facturable ? "Oui" : "Non", e.statut]);
+    }
+    telecharger(`rapport_${c.nom.replace(/[^\p{L}\p{N}]+/gu, "_")}_${RC.debut}_au_${RC.fin}.csv`, versCSV(rangees), "text/csv;charset=utf-8");
+  };
+
+  const champChantier = h("select", { id: "rc-chantier", value: String(c.id), onchange: (ev) => { RC.chantierId = Number(ev.target.value); rendre(); } },
+    choix.map((x) => h("option", { value: String(x.id) }, x.nom + (x.client ? ` (${x.client})` : "") + (x.actif ? "" : " — archivé"))));
+
+  return h("div", null,
+    h("div", { class: "carte no-print" },
+      h("label", { class: "champ" }, h("span", null, "Chantier"), champChantier),
+      selecteurPeriode(RC, rendre),
+      h("label", { class: "case", style: { marginBottom: 0 } },
+        h("input", { type: "checkbox", checked: RC.tout, onchange: (ev) => { RC.tout = ev.target.checked; rendre(); } }),
+        h("span", null, "Inclure les heures pas encore approuvées"))),
+    !RC.tout && enAttente ? h("div", { class: "alerte jaune no-print" }, `${enAttente} entrée${enAttente > 1 ? "s" : ""} en attente d’approbation ne ${enAttente > 1 ? "sont" : "est"} pas comptée${enAttente > 1 ? "s" : ""}. `,
+      h("button", { class: "btn lien", onclick: () => { S.semaineAdmin = lundiDe(versDate(RC.debut)); allerA("approbation"); } }, "Aller approuver")) : null,
+    h("article", { class: "carte rapport-doc" },
+      h("header", { class: "rapport-tete" },
+        h("div", { class: "muet petit" }, S.params.nom_entreprise || "Rapport de chantier"),
+        h("h2", null, c.nom),
+        h("div", { class: "muet" }, [c.client, c.adresse].filter(Boolean).join(" · ")),
+        c.qbo_nom ? h("div", { class: "petit", style: { color: "#1e4e8c" } }, "QuickBooks : ", c.qbo_nom) : null,
+        h("div", { class: "rapport-periode" }, `Du ${dateTexte(RC.debut)} au ${dateTexte(RC.fin)}`)),
+      entrees.length ? h("div", null,
+        h("div", { class: "rapport-chiffres" },
+          h("div", null, h("span", null, "Heures"), h("b", null, fmtH(tot.heures))),
+          h("div", null, h("span", null, "Facturables"), h("b", null, fmtH(tot.fact))),
+          h("div", null, h("span", null, "Non facturables"), h("b", null, fmtH(arrondi2(tot.heures - tot.fact)))),
+          h("div", null, h("span", null, "Coût m.-o."), h("b", null, fmtArgent(tot.cout)))),
+        h("h3", { class: "section-titre" }, "Par code de coût"),
+        tableTotaux("Par code", "Code", parCode.map(([code, l]) => ligneTotaux(libelleCode(code), l))),
+        h("h3", { class: "section-titre" }, "Par employé"),
+        tableTotaux("Par employé", "Employé", parEmp.map(([id, l]) => ligneTotaux(nomEmploye(id), l))),
+        h("h3", { class: "section-titre" }, "Détail : qui a fait quoi"),
+        h("div", { class: "table-wrap" }, h("table", { class: "journal" },
+          h("thead", null, h("tr", null, h("th", null, "Date"), h("th", null, "Employé"), h("th", null, "Code"), h("th", null, "Description"), h("th", { class: "num" }, "Heures"))),
+          h("tbody", null, corpsJournal, h("tr", { class: "total" }, h("td", { colspan: "4" }, "Total de la période"), h("td", { class: "num" }, fmtNb(tot.heures)))))),
+        h("p", { class: "muet petit" }, "Coût de main-d’œuvre = heures × taux horaire actuel de l’employé (sans charges sociales)."))
+        : h("div", { class: "vide" }, RC.tout ? "Aucune heure sur ce chantier pour cette période." : "Aucune heure approuvée sur ce chantier pour cette période.")),
+    entrees.length ? h("div", { class: "ligne-flex no-print", style: { flexWrap: "wrap" } },
+      h("button", { class: "btn", style: { flex: "1 1 160px" }, onclick: () => window.print() }, "Imprimer / PDF"),
+      h("button", { class: "btn", style: { flex: "1 1 160px" }, onclick: exporter }, "Télécharger (CSV / Excel)")) : null);
+}
+
+async function vueSommaire() {
+  const R = S.rapport;
+  const entreesBrutes = await chargerEntrees({ debut: R.debut, fin: R.fin });
+  const entrees = entreesBrutes.filter((e) => R.tout ? e.statut !== "refuse" : e.statut === "approuve");
+  const nonApprouvees = entreesBrutes.filter((e) => e.statut === "soumis").length;
+  const taux = (id) => Number((S.profils.get(id) || {}).taux || 0);
+
+  const parChantier = new Map();
+  for (const e of entrees) {
+    if (!parChantier.has(e.chantier_id)) parChantier.set(e.chantier_id, []);
+    parChantier.get(e.chantier_id).push(e);
+  }
+  const lignes = [...parChantier.entries()].map(([id, liste]) => ({
+    id, nom: nomChantier(id), liste,
+    heures: somme(liste, (e) => e.heures),
+    facturables: somme(liste.filter((e) => e.facturable), (e) => e.heures),
+    cout: somme(liste, (e) => e.heures * taux(e.employe_id)),
+  })).sort((a, b) => b.heures - a.heures);
+  const sansTaux = [...new Set(entrees.map((e) => e.employe_id))].filter((id) => !taux(id));
+
+  const corps = [];
+  for (const l of lignes) {
+    const ouvert = R.ouverts.has(l.id);
+    corps.push(h("tr", { style: { cursor: "pointer" }, onclick: () => { ouvert ? R.ouverts.delete(l.id) : R.ouverts.add(l.id); rendre(); } },
+      h("td", { class: "gras" }, ouvert ? "▾ " : "▸ ", l.nom),
+      h("td", { class: "num" }, fmtNb(l.heures)),
+      h("td", { class: "num" }, fmtNb(l.facturables)),
+      h("td", { class: "num" }, fmtArgent(l.cout))));
+    if (ouvert) {
+      // détail par code de coût (ordre de la nomenclature) ou par employé
+      const parCode = R.detail !== "employe";
+      const cle = (e) => parCode ? (e.code_cout || "") : e.employe_id;
+      const groupes = new Map();
+      for (const e of l.liste) groupes.set(cle(e), (groupes.get(cle(e)) || []).concat(e));
+      const ordreCode = (code) => { const c = codeInfo(code); return c ? c.ordre : 9999; };
+      const cles = [...groupes.keys()].sort((a, b) => parCode ? ordreCode(a) - ordreCode(b) || a.localeCompare(b) : nomEmploye(a).localeCompare(nomEmploye(b), "fr"));
+      for (const k of cles) {
+        const le = groupes.get(k);
+        corps.push(h("tr", { class: "sous" },
+          h("td", null, parCode ? libelleCode(k) : nomEmploye(k)),
+          h("td", { class: "num" }, fmtNb(somme(le, (e) => e.heures))),
+          h("td", { class: "num" }, fmtNb(somme(le.filter((e) => e.facturable), (e) => e.heures))),
+          h("td", { class: "num" }, fmtArgent(somme(le, (e) => e.heures * taux(e.employe_id))))));
+      }
+    }
+  }
+  corps.push(h("tr", { class: "total" },
+    h("td", null, "Total"),
+    h("td", { class: "num" }, fmtNb(somme(lignes, (l) => l.heures))),
+    h("td", { class: "num" }, fmtNb(somme(lignes, (l) => l.facturables))),
+    h("td", { class: "num" }, fmtArgent(somme(lignes, (l) => l.cout)))));
+
+  const exporter = () => {
+    const rangees = [["Date", "Employé", "Chantier", "Client", "Code de coût", "Libellé du code", "Heures", "Facturable", "Taux", "Coût", "Statut", "Description"]];
+    for (const e of [...entrees].sort((a, b) => a.date.localeCompare(b.date))) {
+      const c = S.chantiers.find((x) => x.id === e.chantier_id) || {};
+      const cc = codeInfo(e.code_cout) || {};
+      rangees.push([e.date, nomEmploye(e.employe_id), c.nom || "", c.client || "", e.code_cout || "", cc.libelle || "", Number(e.heures), e.facturable ? "Oui" : "Non",
+        taux(e.employe_id), arrondi2(e.heures * taux(e.employe_id)), e.statut, e.note || ""]);
+    }
+    telecharger(`heures_chantiers_${R.debut}_au_${R.fin}.csv`, versCSV(rangees), "text/csv;charset=utf-8");
+  };
+
+  return h("div", null,
+    h("div", { class: "carte" },
+      selecteurPeriode(R, rendre),
+      h("label", { class: "case", style: { marginBottom: 0 } },
+        h("input", { type: "checkbox", checked: R.tout, onchange: (e) => { R.tout = e.target.checked; rendre(); } }),
+        h("span", null, "Inclure les heures pas encore approuvées")),
+      h("div", { style: { marginTop: "12px" } },
+        h("div", { class: "muet petit", style: { marginBottom: "5px" } }, "Détail des chantiers"),
+        h("div", { class: "segment" },
+          h("button", { class: R.detail !== "employe" ? "actif" : "", onclick: () => { R.detail = "code"; rendre(); } }, "Par code"),
+          h("button", { class: R.detail === "employe" ? "actif" : "", onclick: () => { R.detail = "employe"; rendre(); } }, "Par employé")))),
+    !R.tout && nonApprouvees ? h("div", { class: "alerte jaune" }, `${nonApprouvees} entrée${nonApprouvees > 1 ? "s" : ""} en attente d’approbation ne sont pas comptées.`) : null,
+    sansTaux.length ? h("div", { class: "alerte jaune" }, "Taux horaire manquant pour : ", sansTaux.map(nomEmploye).join(", "), ". Leur coût compte pour 0 $ (Gestion > Employés).") : null,
+    h("div", { class: "carte" },
+      lignes.length ? h("div", { class: "table-wrap" }, h("table", null,
+        h("thead", null, h("tr", null, h("th", null, "Chantier"), h("th", { class: "num" }, "Heures"), h("th", { class: "num" }, "Factur."), h("th", { class: "num" }, "Coût m.-o."))),
+        h("tbody", null, corps)))
+        : h("div", { class: "vide" }, "Aucune heure pour cette période."),
+      lignes.length ? h("p", { class: "muet petit", style: { marginBottom: 0 } }, "Coût de main-d’œuvre = heures × taux horaire actuel de l’employé (sans charges sociales). Touche un chantier pour voir le détail.") : null),
+    lignes.length ? h("button", { class: "btn plein", onclick: exporter }, "Télécharger le détail (CSV / Excel)") : null);
+}
+
+/* =====================================================================
+   Vue : Export paie Employeur D (admin)
+   ===================================================================== */
+async function vuePaie() {
+  const P = S.paie;
+  const [entrees, absences] = await Promise.all([chargerEntrees({ debut: P.debut, fin: P.fin }), chargerAbsences({ debut: P.debut, fin: P.fin })]);
+  const resumeAbsences = (id) => Object.entries(TYPES_ABSENCE)
+    .map(([t, lib]) => { const n = absences.filter((a) => a.employe_id === id && a.type === t).length; return n ? `${lib} ${n} j` : null; })
+    .filter(Boolean).join(" · ");
+  const employes = [...S.profils.values()].filter((p) => p.actif || entrees.some((e) => e.employe_id === p.id));
+  const lignes = employes.map((p) => {
+    const siennes = entrees.filter((e) => e.employe_id === p.id);
+    return {
+      p,
+      approuvees: somme(siennes.filter((e) => e.statut === "approuve"), (e) => e.heures),
+      attente: somme(siennes.filter((e) => e.statut === "soumis"), (e) => e.heures),
+    };
+  }).filter((l) => l.approuvees || l.attente || l.p.actif);
+
+  const totalAttente = somme(lignes, (l) => l.attente);
+  const sansMatricule = lignes.filter((l) => l.approuvees > 0 && !l.p.matricule);
+  const manqueParams = !S.params.no_compagnie || !S.params.code_gain;
+  const aExporter = lignes.filter((l) => l.approuvees > 0);
+  const bloque = !aExporter.length || sansMatricule.length > 0 || manqueParams;
+
+  const exporterEmployeurD = () => {
+    const donnees = aExporter.map((l) => ({
+      noCompagnie: S.params.no_compagnie, matricule: l.p.matricule, periode: P.fin,
+      codeGain: S.params.code_gain, heures: l.approuvees, nom: l.p.nom,
+    }));
+    const rangees = [COLONNES_EMPLOYEUR_D.map((c) => c.titre), ...donnees.map((d) => COLONNES_EMPLOYEUR_D.map((c) => c.valeur(d)))];
+    const feuille = XLSX.utils.aoa_to_sheet(rangees);
+    const classeur = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(classeur, feuille, "Transactions");
+    XLSX.writeFile(classeur, `employeur_d_${P.fin}.xls`, { bookType: "biff8" });
+    toast("Fichier téléchargé. Importe-le dans Employeur D.");
+  };
+  const exporterDetail = () => {
+    const rangees = [["Employé", "Matricule", "Date", "Chantier", "Heures", "Statut"]];
+    for (const e of entrees.filter((x) => x.statut === "approuve").sort((a, b) => nomEmploye(a.employe_id).localeCompare(nomEmploye(b.employe_id), "fr") || a.date.localeCompare(b.date))) {
+      const p = S.profils.get(e.employe_id) || {};
+      rangees.push([p.nom || "", p.matricule || "", e.date, nomChantier(e.chantier_id), Number(e.heures), "approuvé"]);
+    }
+    telecharger(`detail_paie_${P.debut}_au_${P.fin}.csv`, versCSV(rangees), "text/csv;charset=utf-8");
+  };
+
+  return h("div", null,
+    h("div", { class: "carte" },
+      h("h3", { style: { marginBottom: "10px" } }, "Période de paie"),
+      selecteurPeriode(P, rendre),
+      h("p", { class: "muet petit", style: { margin: 0 } }, `La date de fin (${P.fin}) sera inscrite comme période dans le fichier. Elle doit correspondre au dernier jour de la période de paie dans Employeur D, sinon l’import échoue.`)),
+    totalAttente ? h("div", { class: "alerte jaune" }, `${fmtH(totalAttente)} sont encore en attente d’approbation et ne seront pas exportées. `,
+      h("button", { class: "btn lien", onclick: () => { S.semaineAdmin = lundiDe(versDate(P.debut)); allerA("approbation"); } }, "Aller approuver")) : null,
+    manqueParams ? h("div", { class: "alerte rouge" }, "Le numéro de compagnie et le code de gain Employeur D sont requis. ",
+      h("button", { class: "btn lien", onclick: () => { S.gestion = "parametres"; allerA("gestion"); } }, "Les entrer")) : null,
+    sansMatricule.length ? h("div", { class: "alerte rouge" }, "Matricule Employeur D manquant pour : ", sansMatricule.map((l) => l.p.nom).join(", "), ". ",
+      h("button", { class: "btn lien", onclick: () => { S.gestion = "employes"; allerA("gestion"); } }, "Les ajouter")) : null,
+    h("div", { class: "carte" },
+      h("div", { class: "table-wrap" }, h("table", null,
+        h("thead", null, h("tr", null, h("th", null, "Employé"), h("th", null, "Matr."), h("th", { class: "num" }, "Approuv."), h("th", { class: "num" }, "Attente"))),
+        h("tbody", null,
+          lignes.map((l) => h("tr", null,
+            h("td", null, h("div", { class: "gras" }, l.p.nom), resumeAbsences(l.p.id) ? h("div", { class: "muet petit" }, resumeAbsences(l.p.id)) : null),
+            h("td", null, l.p.matricule || h("span", { style: { color: "var(--rouge)" } }, "—")),
+            h("td", { class: "num" }, fmtNb(l.approuvees)),
+            h("td", { class: "num" }, l.attente ? h("span", { style: { color: "var(--jaune)" } }, fmtNb(l.attente)) : "—"))),
+          h("tr", { class: "total" }, h("td", null, "Total"), h("td"),
+            h("td", { class: "num" }, fmtNb(somme(lignes, (l) => l.approuvees))),
+            h("td", { class: "num" }, fmtNb(totalAttente))))))),
+    h("button", { class: "btn primaire plein", disabled: bloque, onclick: exporterEmployeurD, style: { marginBottom: "8px" } }, "Télécharger le fichier Employeur D (.xls)"),
+    h("button", { class: "btn plein", disabled: !aExporter.length, onclick: exporterDetail }, "Télécharger le détail par jour (CSV)"),
+    h("div", { class: "alerte info", style: { marginTop: "14px" } },
+      h("b", null, "Dans Employeur D : "), "Paie > Outils > Importer les transactions, choisis le format « Excel (en colonnes) » et sélectionne le fichier. Vérifie ensuite dans Paie > Calendrier de paie courant."));
+}
+
+/* =====================================================================
+   Vue : Exports (admin) — Paie Employeur D + Transfert QuickBooks
+   ===================================================================== */
+async function vueExports() {
+  const onglets = [["paie", "Paie (Employeur D)"], ["qbo", "QuickBooks"]];
+  const contenu = S.export === "qbo" ? await vueQuickBooks() : await vuePaie();
+  return h("div", null,
+    h("div", { class: "onglets" }, onglets.map(([cle, nom]) =>
+      h("button", { class: S.export === cle ? "actif" : "", onclick: () => { S.export = cle; rendre(); } }, nom))),
+    contenu);
+}
+
+function nomQuickBooks(c) { return (c && (c.qbo_nom || c.client)) || ""; }
+function csvQuickBooks(entrees) {
+  const rangees = [["Date", "Employé", "Client/projet QuickBooks", "Chantier", "Code de coût", "Libellé du code", "Heures", "Facturable", "Description"]];
+  const triees = [...entrees].sort((a, b) =>
+    nomChantier(a.chantier_id).localeCompare(nomChantier(b.chantier_id), "fr") ||
+    nomEmploye(a.employe_id).localeCompare(nomEmploye(b.employe_id), "fr") || a.date.localeCompare(b.date));
+  for (const e of triees) {
+    const c = S.chantiers.find((x) => x.id === e.chantier_id) || {};
+    const cc = codeInfo(e.code_cout) || {};
+    rangees.push([e.date, nomEmploye(e.employe_id), nomQuickBooks(c), c.nom || "", e.code_cout || "", cc.libelle || "", Number(e.heures), e.facturable ? "Oui" : "Non", e.note || ""]);
+  }
+  return versCSV(rangees);
+}
+
+async function vueQuickBooks() {
+  const Q = S.qbo;
+  const entrees = await chargerEntrees({ debut: Q.debut, fin: Q.fin });
+  const aTransferer = entrees.filter((e) => e.statut === "approuve" && !estVerrouillee(e));
+  const deja = entrees.filter(estVerrouillee);
+  const enAttente = entrees.filter((e) => e.statut === "soumis");
+  const refusees = grouper(entrees.filter((e) => e.statut === "refuse"));
+
+  const parChantier = new Map();
+  for (const e of aTransferer) parChantier.set(e.chantier_id, (parChantier.get(e.chantier_id) || []).concat(e));
+  const lignes = [...parChantier.entries()].map(([id, liste]) => {
+    const c = S.chantiers.find((x) => x.id === id) || {};
+    return { nom: nomChantier(id), client: c.qbo_nom || c.client || "", lie: Boolean(qboConnecte() ? c.qbo_customer_id : c.qbo_nom), heures: somme(liste, (e) => e.heures), facturables: somme(liste.filter((e) => e.facturable), (e) => e.heures) };
+  }).sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+
+  const totalH = somme(aTransferer, (e) => e.heures);
+  const direct = qboConnecte();
+  const manquants = direct ? correspondancesManquantes(aTransferer) : [];
+
+  // Envoi direct dans QuickBooks (connexion active)
+  const envoyer = (ev) => avecAttente(ev.currentTarget, async () => {
+    const nb = grouper(aTransferer).length;
+    const ok = await confirmer("Envoyer à QuickBooks ?",
+      `${nb} entrée${nb > 1 ? "s" : ""} (${fmtH(totalH)}) seront créées dans QuickBooks${S.qboStatut.entreprise ? ` (${S.qboStatut.entreprise})` : ""}, puis verrouillées dans l’app.`,
+      "Envoyer");
+    if (!ok) return;
+    try {
+      const ids = aTransferer.map((e) => e.id);
+      let envoyees = 0; const erreurs = []; let manque = [];
+      for (let i = 0; i < ids.length; i += 200) {
+        const r = await appelQbo("envoyer", { ids: ids.slice(i, i + 200) });
+        envoyees += r.envoyees || 0; erreurs.push(...(r.erreurs || [])); manque = manque.concat(r.manquants || []);
+        if (r.manquants && r.manquants.length) break;
+      }
+      if (manque.length) {
+        ouvrirModal((fermer) => ({ titre: "Correspondances à faire", contenu: h("div", null,
+          h("p", null, "Rien n’a été envoyé. Associe d’abord à QuickBooks :"), h("ul", null, manque.map((m) => h("li", null, m)))),
+          actions: [h("button", { class: "btn", onclick: fermer }, "Fermer"),
+            h("button", { class: "btn primaire", onclick: () => { fermer(); S.gestion = "quickbooks"; allerA("gestion"); } }, "Les associer")] }));
+      } else if (erreurs.length) {
+        ouvrirModal((fermer) => ({ titre: `${envoyees} envoyée${envoyees > 1 ? "s" : ""}, ${erreurs.length} refusée${erreurs.length > 1 ? "s" : ""}`, contenu: h("div", null,
+          h("p", null, "QuickBooks a refusé ces lignes. Elles restent à envoyer :"),
+          h("ul", null, erreurs.map((x) => { const e = aTransferer.find((y) => y.id === x.id) || {}; return h("li", null, h("b", null, `${nomEmploye(e.employe_id)}, ${e.date} : `), x.message); }))),
+          actions: [h("button", { class: "btn primaire", onclick: fermer }, "OK")] }));
+      } else {
+        toast(`${envoyees} ligne${envoyees > 1 ? "s" : ""} envoyée${envoyees > 1 ? "s" : ""} à QuickBooks.`);
+      }
+      rendre();
+    } catch (err) { erreur(err); rendre(); }
+  });
+
+  const transferer = (ev) => avecAttente(ev.currentTarget, async () => {
+    const ok = await confirmer("Transférer à QuickBooks ?",
+      `${grouper(aTransferer).length} entrée${grouper(aTransferer).length > 1 ? "s" : ""} (${fmtH(totalH)}) seront verrouillées : les employés ne pourront plus les modifier. Le fichier des heures sera téléchargé pour les entrer dans QuickBooks.`,
+      "Transférer et verrouiller");
+    if (!ok) return;
+    try {
+      const maintenant = new Date().toISOString();
+      const ids = aTransferer.map((e) => e.id);
+      for (let i = 0; i < ids.length; i += 200) {
+        await q(sb.from("entrees").update({ exporte_qbo_le: maintenant }).in("id", ids.slice(i, i + 200)));
+      }
+      telecharger(`quickbooks_${Q.debut}_au_${Q.fin}.csv`, csvQuickBooks(aTransferer), "text/csv;charset=utf-8");
+      toast("Heures verrouillées et fichier téléchargé.");
+      rendre();
+    } catch (err) { erreur(err); rendre(); }
+  });
+
+  return h("div", null,
+    h("div", { class: "carte" },
+      h("h3", { style: { marginBottom: "10px" } }, "Période à facturer"),
+      selecteurPeriode(Q, rendre),
+      h("p", { class: "muet petit", style: { margin: 0 } }, "Seules les heures approuvées sont transférées. Une fois transférées, elles sont verrouillées pour tout le monde.")),
+    enAttente.length ? h("div", { class: "alerte jaune" }, `${fmtH(somme(enAttente, (e) => e.heures))} encore en attente d’approbation ne seront pas transférées. `,
+      h("button", { class: "btn lien", onclick: () => { S.semaineAdmin = lundiDe(versDate(Q.debut)); allerA("approbation"); } }, "Aller approuver")) : null,
+    direct && manquants.length ? h("div", { class: "alerte rouge" }, "Avant d’envoyer, associe à QuickBooks : ", manquants.join(", "), ". ",
+      h("button", { class: "btn lien", onclick: () => { S.gestion = "quickbooks"; allerA("gestion"); } }, "Les associer")) : null,
+    !direct && lignes.some((l) => !l.lie) ? h("div", { class: "alerte jaune" }, "Certains chantiers ne sont pas associés à un client/projet QuickBooks. ",
+      h("button", { class: "btn lien", onclick: () => { S.gestion = "chantiers"; allerA("gestion"); } }, "Les associer")) : null,
+    refusees.length ? h("div", { class: "alerte jaune" }, `${refusees.length} entrée${refusees.length > 1 ? "s refusées attendent" : " refusée attend"} une correction de l’employé.`) : null,
+    h("div", { class: "carte" },
+      h("h3", { style: { marginBottom: "6px" } }, "Prêtes à transférer"),
+      lignes.length ? h("div", { class: "table-wrap" }, h("table", null,
+        h("thead", null, h("tr", null, h("th", null, "Chantier"), h("th", { class: "num" }, "Heures"), h("th", { class: "num" }, "Factur."))),
+        h("tbody", null,
+          lignes.map((l) => h("tr", null,
+            h("td", null, h("div", { class: "gras" }, l.nom),
+              h("div", { class: "muet petit" }, l.lie ? `QuickBooks : ${l.client}` : h("span", { style: { color: "var(--jaune)" } }, "Pas associé à QuickBooks"))),
+            h("td", { class: "num" }, fmtNb(l.heures)),
+            h("td", { class: "num" }, fmtNb(l.facturables)))),
+          h("tr", { class: "total" }, h("td", null, "Total"),
+            h("td", { class: "num" }, fmtNb(totalH)),
+            h("td", { class: "num" }, fmtNb(somme(lignes, (l) => l.facturables)))))))
+        : h("div", { class: "vide" }, deja.length ? "Tout est déjà transféré pour cette période." : "Aucune heure approuvée à transférer pour cette période.")),
+    direct
+      ? h("button", { class: "btn primaire plein", disabled: !aTransferer.length || manquants.length > 0, onclick: envoyer, style: { marginBottom: "8px" } },
+          aTransferer.length ? `Envoyer à QuickBooks (${fmtH(totalH)})` : "Envoyer à QuickBooks")
+      : h("button", { class: "btn primaire plein", disabled: !aTransferer.length, onclick: transferer, style: { marginBottom: "8px" } },
+          aTransferer.length ? `Transférer à QuickBooks (${fmtH(totalH)})` : "Transférer à QuickBooks"),
+    deja.length ? h("div", { class: "carte ligne-flex", style: { marginTop: "6px" } },
+      h("span", { class: "badge qbo" }, "🔒 QuickBooks"),
+      h("span", { class: "espace muet petit" }, `${fmtH(somme(deja, (e) => e.heures))} déjà transférées (${grouper(deja).length} entrée${grouper(deja).length > 1 ? "s" : ""})`),
+      h("button", { class: "btn petit", onclick: () => telecharger(`quickbooks_deja_transferees_${Q.debut}_au_${Q.fin}.csv`, csvQuickBooks(deja), "text/csv;charset=utf-8") }, "Retélécharger")) : null,
+    direct
+      ? h("div", { class: "alerte info", style: { marginTop: "14px" } },
+          h("b", null, `Connecté à ${S.qboStatut.entreprise || "QuickBooks"}. `),
+          "Chaque ligne devient une activité de temps dans QuickBooks, sur le bon client, avec son code et sa description. Les heures facturables apparaissent ensuite quand tu crées la facture du client.")
+      : h("div", { class: "alerte info", style: { marginTop: "14px" } },
+          h("b", null, "Sans connexion directe : "),
+          "le bouton verrouille les heures et te donne un fichier pour les entrer dans QuickBooks. Pour envoyer directement, connecte QuickBooks dans ",
+          h("button", { class: "btn lien", onclick: () => { S.gestion = "quickbooks"; allerA("gestion"); } }, "Gestion › QuickBooks"), "."));
+}
+
+/* =====================================================================
+   Vue : Gestion (admin)
+   ===================================================================== */
+async function vueGestion() {
+  const onglets = [["chantiers", "Chantiers"], ["codes", "Codes"], ["employes", "Employés"], ["quickbooks", "QuickBooks"], ["parametres", "Paramètres"]];
+  const contenu = await (S.gestion === "employes" ? gestionEmployes() : S.gestion === "parametres" ? gestionParametres()
+    : S.gestion === "codes" ? gestionCodes() : S.gestion === "quickbooks" ? gestionQuickBooks() : gestionChantiers());
+  return h("div", null,
+    h("div", { class: "onglets" }, onglets.map(([cle, nom]) =>
+      h("button", { class: S.gestion === cle ? "actif" : "", onclick: () => { S.gestion = cle; rendre(); } }, nom))),
+    contenu);
+}
+
+async function rechargerEtRendre() { await chargerReferences(); rendre(); }
+
+function gestionChantiers() {
+  const liste = S.chantiers.filter((c) => S.afficherArchives || c.actif)
+    .sort((a, b) => (b.actif - a.actif) || a.nom.localeCompare(b.nom, "fr"));
+  const nbArchives = S.chantiers.filter((c) => !c.actif).length;
+  const lieQbo = (c) => qboConnecte() ? Boolean(c.qbo_customer_id) : Boolean(c.qbo_nom);
+  const nonLies = S.chantiers.filter((c) => c.actif && !lieQbo(c)).length;
+  return h("div", null,
+    h("div", { class: "ligne-flex", style: { marginBottom: "12px" } },
+      h("button", { class: "btn primaire", style: { flex: 1 }, onclick: () => formChantier() }, "+ Nouveau chantier"),
+      h("button", { class: "btn", style: { flex: 1 }, onclick: importerQuickBooks }, "Importer de QuickBooks")),
+    nonLies ? h("div", { class: "alerte jaune" }, `${nonLies} chantier${nonLies > 1 ? "s actifs ne sont pas associés" : " actif n’est pas associé"} à un client/projet QuickBooks. `,
+      qboConnecte() ? h("button", { class: "btn lien", onclick: () => { S.gestion = "quickbooks"; rendre(); } }, "Les associer") : "Touche-le pour entrer son nom QuickBooks, ou importe ta liste.") : null,
+    h("div", { class: "carte", style: { padding: 0 } },
+      liste.length ? liste.map((c) => h("div", { class: "liste-item" + (c.actif ? "" : " inactif"), onclick: () => formChantier(c) },
+        h("div", { style: { flex: 1, minWidth: 0 } },
+          h("div", { class: "gras" }, c.nom),
+          c.client || c.adresse ? h("div", { class: "muet petit" }, [c.client, c.adresse].filter(Boolean).join(" · ")) : null,
+          c.qbo_nom ? h("div", { class: "petit", style: { color: "#1e4e8c" } }, "QuickBooks : ", c.qbo_nom) : null),
+        !lieQbo(c) && c.actif ? h("span", { class: "badge soumis" }, "Pas lié à QBO") : null,
+        !c.facturable ? h("span", { class: "badge neutre" }, "Non facturable") : null,
+        !c.actif ? h("span", { class: "badge neutre" }, "Archivé") : null))
+        : h("div", { class: "vide" }, "Aucun chantier. Importe ta liste de QuickBooks ou ajoute ton premier chantier.")),
+    nbArchives ? h("button", { class: "btn lien", onclick: () => { S.afficherArchives = !S.afficherArchives; rendre(); } },
+      S.afficherArchives ? "Cacher les chantiers archivés" : `Afficher les chantiers archivés (${nbArchives})`) : null);
+}
+
+function formChantier(c) {
+  const nouveau = !c;
+  const nom = h("input", { type: "text", required: true, value: c ? c.nom : "" });
+  const client = h("input", { type: "text", value: c ? c.client || "" : "" });
+  const qboNom = h("input", { type: "text", placeholder: "ex. Dupont:Rénovation cuisine", value: c ? c.qbo_nom || "" : "", disabled: qboConnecte() });
+  const adresse = h("input", { type: "text", value: c ? c.adresse || "" : "" });
+  const facturable = h("input", { type: "checkbox", checked: c ? c.facturable : true });
+  const actif = h("input", { type: "checkbox", checked: c ? c.actif : true });
+  ouvrirModal((fermer) => ({
+    titre: nouveau ? "Nouveau chantier" : "Modifier le chantier",
+    contenu: h("div", null,
+      h("label", { class: "champ" }, h("span", null, "Nom du chantier"), nom),
+      h("label", { class: "champ" }, h("span", null, "Client"), client),
+      h("label", { class: "champ" }, h("span", null, "Client/projet dans QuickBooks (nom exact)"), qboNom,
+        h("div", { class: "muet petit", style: { marginTop: "4px" } }, qboConnecte() ? "Se choisit dans Gestion › QuickBooks." : "Tel qu’il apparaît dans QuickBooks. Pour un projet ou sous-client : Client:Projet.")),
+      h("label", { class: "champ" }, h("span", null, "Adresse"), adresse),
+      h("label", { class: "case" }, facturable, h("span", null, "Heures facturables au client par défaut")),
+      nouveau ? null : h("label", { class: "case" }, actif, h("span", null, "Actif (décoche pour archiver un chantier terminé)"))),
+    actions: [
+      h("button", { class: "btn", onclick: fermer }, "Annuler"),
+      h("button", { class: "btn primaire", onclick: (e) => avecAttente(e.currentTarget, async () => {
+        if (!nom.value.trim()) { toast("Le nom est requis.", "erreur"); return; }
+        const donnees = { nom: nom.value.trim(), client: client.value.trim() || null, ...(qboConnecte() ? {} : { qbo_nom: qboNom.value.trim() || null }),
+          adresse: adresse.value.trim() || null, facturable: facturable.checked, actif: nouveau ? true : actif.checked };
+        try {
+          if (nouveau) await q(sb.from("chantiers").insert(donnees));
+          else await q(sb.from("chantiers").update(donnees).eq("id", c.id));
+          fermer(); toast("Chantier enregistré."); await rechargerEtRendre();
+        } catch (err) { erreur(err); }
+      }) }, "Enregistrer"),
+    ],
+  }));
+}
+
+/* ---------- Import de la liste des clients/projets QuickBooks ---------- */
+// Lit un export Excel/CSV de QuickBooks et en tire les noms de clients/projets.
+// Les projets et sous-clients apparaissent sous la forme « Client:Projet ».
+function lireListeQuickBooks(rangees) {
+  const texte = (v) => String(v === null || v === undefined ? "" : v).trim();
+  const titresNom = /^(client|customer|nom du client|nom complet du client|customer full name|full name|nom d.affichage|display name|nom|name)$/i;
+  const titresProjet = /^(projet|project|nom du projet|project name)$/i;
+  let ligneTitre = -1, colNom = -1, colProjet = -1;
+  for (let i = 0; i < Math.min(rangees.length, 15) && ligneTitre < 0; i++) {
+    const r = (rangees[i] || []).map(texte);
+    // priorité aux titres les plus précis
+    const idx = r.findIndex((c) => /^(client|customer|nom du client|nom complet du client|customer full name)$/i.test(c));
+    const j = idx >= 0 ? idx : r.findIndex((c) => titresNom.test(c));
+    if (j >= 0) { ligneTitre = i; colNom = j; colProjet = r.findIndex((c) => titresProjet.test(c)); }
+  }
+  if (ligneTitre < 0) { ligneTitre = -1; colNom = 0; }   // pas de titre : 1re colonne
+  const vus = new Set();
+  const items = [];
+  for (const r of rangees.slice(ligneTitre + 1)) {
+    let nomComplet = texte((r || [])[colNom]);
+    if (!nomComplet || /^total/i.test(nomComplet)) continue;
+    const projet = colProjet >= 0 ? texte(r[colProjet]) : "";
+    if (projet) nomComplet = `${nomComplet}:${projet}`;
+    if (vus.has(nomComplet)) continue;
+    vus.add(nomComplet);
+    const parties = nomComplet.split(":").map((x) => x.trim()).filter(Boolean);
+    items.push({ qboNom: nomComplet, nom: parties[parties.length - 1], client: parties[0] });
+  }
+  return items;
+}
+
+function importerQuickBooks() {
+  const zone = h("div");
+  const fichier = h("input", { type: "file", accept: ".xlsx,.xls,.csv" });
+  let items = [];
+  const boutonImporter = h("button", { class: "btn primaire", disabled: true }, "Importer");
+
+  const afficher = () => {
+    const cases = items.map((it) => {
+      const lie = S.chantiers.find((c) => (it.qboId && c.qbo_customer_id === it.qboId) || (c.qbo_nom && c.qbo_nom.toLowerCase() === it.qboNom.toLowerCase()));
+      const memeNom = !lie && S.chantiers.find((c) => !c.qbo_nom && c.nom.toLowerCase() === it.nom.toLowerCase());
+      it.action = lie ? "deja" : memeNom ? "associer" : "nouveau";
+      it.chantierId = memeNom ? memeNom.id : null;
+      const caseCoche = h("input", { type: "checkbox", checked: it.action !== "deja" && it.choisi !== false, disabled: it.action === "deja",
+        onchange: (e) => { it.choisi = e.target.checked; majBouton(); } });
+      it.choisi = caseCoche.checked;
+      return h("label", { class: "case", style: { marginBottom: "8px", alignItems: "flex-start" } }, caseCoche,
+        h("span", null, h("span", { class: "gras" }, it.qboNom), " ",
+          it.action === "deja" ? h("span", { class: "badge neutre" }, "Déjà là")
+            : it.action === "associer" ? h("span", { class: "badge qbo" }, "Associer au chantier existant") : null));
+    });
+    zone.replaceChildren(
+      items.length ? h("p", { class: "muet petit" }, `${items.length} client${items.length > 1 ? "s" : ""}/projet${items.length > 1 ? "s" : ""} trouvé${items.length > 1 ? "s" : ""}. Coche ceux qui sont des chantiers.`)
+        : h("div", { class: "alerte jaune" }, "Aucun nom trouvé dans ce fichier. Vérifie que c’est bien la liste des clients exportée de QuickBooks."),
+      items.length ? h("div", { class: "ligne-flex", style: { marginBottom: "8px" } },
+        h("button", { class: "btn lien", type: "button", onclick: () => { items.forEach((i) => { if (i.action !== "deja") i.choisi = true; }); afficher(); } }, "Tout cocher"),
+        h("button", { class: "btn lien", type: "button", onclick: () => { items.forEach((i) => { i.choisi = false; }); afficher(); } }, "Tout décocher")) : null,
+      h("div", { style: { maxHeight: "45vh", overflowY: "auto" } }, cases));
+    majBouton();
+  };
+  const majBouton = () => {
+    const n = items.filter((i) => i.choisi && i.action !== "deja").length;
+    boutonImporter.disabled = n === 0;
+    boutonImporter.textContent = n ? `Importer (${n})` : "Importer";
+  };
+
+  fichier.addEventListener("change", async () => {
+    const f = fichier.files[0];
+    if (!f) return;
+    try {
+      const classeur = XLSX.read(await f.arrayBuffer(), { type: "array" });
+      const feuille = classeur.Sheets[classeur.SheetNames[0]];
+      items = lireListeQuickBooks(XLSX.utils.sheet_to_json(feuille, { header: 1, defval: "" }));
+      afficher();
+    } catch (err) { erreur(new Error("Impossible de lire ce fichier.")); }
+  });
+
+  ouvrirModal((fermer) => {
+    boutonImporter.addEventListener("click", () => avecAttente(boutonImporter, async () => {
+      const choisis = items.filter((i) => i.choisi && i.action !== "deja");
+      try {
+        const nouveaux = choisis.filter((i) => i.action === "nouveau")
+          .map((i) => ({ nom: i.nom, client: i.client !== i.nom ? i.client : null, qbo_nom: i.qboNom, qbo_customer_id: i.qboId || null, facturable: true, actif: true }));
+        if (nouveaux.length) await q(sb.from("chantiers").insert(nouveaux));
+        for (const i of choisis.filter((x) => x.action === "associer")) {
+          await q(sb.from("chantiers").update(i.qboId ? { qbo_nom: i.qboNom, qbo_customer_id: i.qboId } : { qbo_nom: i.qboNom }).eq("id", i.chantierId));
+        }
+        fermer(); toast(`${choisis.length} chantier${choisis.length > 1 ? "s" : ""} importé${choisis.length > 1 ? "s" : ""}.`); await rechargerEtRendre();
+      } catch (err) { erreur(err); }
+    }));
+    return {
+      titre: "Importer de QuickBooks",
+      contenu: qboConnecte() ? h("div", null,
+        h("button", { class: "btn primaire plein", style: { marginBottom: "12px" }, onclick: (ev) => avecAttente(ev.currentTarget, async () => {
+          try {
+            const L = await listesQbo(true);
+            items = L.clients.map((x) => { const parties = x.nom.split(":").map((t) => t.trim()).filter(Boolean);
+              return { qboId: x.id, qboNom: x.nom, nom: parties[parties.length - 1], client: parties[0], choisi: x.projet || parties.length > 1 ? undefined : false }; });
+            afficher();
+          } catch (err) { erreur(err); }
+        }) }, "Charger la liste de QuickBooks"),
+        h("p", { class: "muet petit" }, "Les projets (Client:Projet) sont cochés d’avance. Coche aussi les clients qui sont eux-mêmes un chantier."),
+        zone) : h("div", null,
+        h("div", { class: "alerte info" },
+          h("b", null, "Dans QuickBooks : "), "Ventes > Clients, puis l’icône Exporter vers Excel (au-dessus de la liste). Les projets apparaissent sous la forme Client:Projet."),
+        h("label", { class: "champ" }, h("span", null, "Fichier exporté (.xlsx, .xls ou .csv)"), fichier),
+        zone),
+      actions: [h("button", { class: "btn", onclick: fermer }, "Annuler"), boutonImporter],
+    };
+  });
+}
+
+/* ---------- Codes de coût ---------- */
+function gestionCodes() {
+  const divisions = [];
+  for (const c of S.codes) {
+    let d = divisions.find((x) => x.division === c.division);
+    if (!d) divisions.push(d = { division: c.division, libelle: c.division_libelle, codes: [] });
+    d.codes.push(c);
+  }
+  const nbInactifs = S.codes.filter((c) => !c.actif).length;
+  return h("div", null,
+    h("button", { class: "btn primaire plein", style: { marginBottom: "12px" }, onclick: () => formCode() }, "+ Nouveau code"),
+    h("p", { class: "muet petit" }, `${S.codes.length - nbInactifs} codes offerts aux employés${nbInactifs ? `, ${nbInactifs} inactifs (cachés)` : ""}. Touche un code pour le modifier ou le désactiver.`),
+    divisions.map((d) => h("div", null,
+      h("div", { class: "section-titre" }, `${d.division} — ${d.libelle || ""}`),
+      h("div", { class: "carte", style: { padding: 0 } }, d.codes.map((c) =>
+        h("div", { class: "liste-item" + (c.actif ? "" : " inactif"), onclick: () => formCode(c) },
+          h("div", { style: { flex: 1, minWidth: 0 } },
+            h("div", null, h("span", { class: "gras", style: { fontVariantNumeric: "tabular-nums" } }, c.code), "  ", c.libelle),
+            c.description ? h("div", { class: "muet petit" }, c.description) : null),
+          !c.actif ? h("span", { class: "badge neutre" }, "Inactif") : null))))));
+}
+
+function formCode(c) {
+  const nouveau = !c;
+  const code = h("input", { type: "text", placeholder: "ex. 06 11 00", value: c ? c.code : "", disabled: !nouveau });
+  const libelle = h("input", { type: "text", value: c ? c.libelle : "" });
+  const description = h("textarea", { rows: 2, value: c ? c.description || "" : "" });
+  const actif = h("input", { type: "checkbox", checked: c ? c.actif : true });
+  ouvrirModal((fermer) => ({
+    titre: nouveau ? "Nouveau code de coût" : `Code ${c.code}`,
+    contenu: h("div", null,
+      h("label", { class: "champ" }, h("span", null, "Code"), code),
+      h("label", { class: "champ" }, h("span", null, "Libellé"), libelle),
+      h("label", { class: "champ" }, h("span", null, "Description (aide affichée aux employés)"), description),
+      h("label", { class: "case" }, actif, h("span", null, "Actif (offert aux employés)"))),
+    actions: [
+      h("button", { class: "btn", onclick: fermer }, "Annuler"),
+      h("button", { class: "btn primaire", onclick: (e) => avecAttente(e.currentTarget, async () => {
+        const valeurCode = code.value.trim().replace(/\s+/g, " ");
+        if (!valeurCode || !libelle.value.trim()) { toast("Le code et le libellé sont requis.", "erreur"); return; }
+        const donnees = { libelle: libelle.value.trim(), description: description.value.trim() || null, actif: actif.checked };
+        try {
+          if (nouveau) {
+            if (codeInfo(valeurCode)) { toast("Ce code existe déjà.", "erreur"); return; }
+            const division = valeurCode.slice(0, 2);
+            const memeDivision = S.codes.filter((x) => x.division === division);
+            await q(sb.from("codes_cout").insert({ ...donnees, code: valeurCode, division,
+              division_libelle: memeDivision.length ? memeDivision[0].division_libelle : null,
+              ordre: memeDivision.length ? Math.max(...memeDivision.map((x) => x.ordre)) : 999 }));
+          } else {
+            await q(sb.from("codes_cout").update(donnees).eq("code", c.code));
+          }
+          fermer(); toast("Code enregistré."); await rechargerEtRendre();
+        } catch (err) { erreur(err); }
+      }) }, "Enregistrer"),
+    ],
+  }));
+}
+
+function etatCompte(p) {
+  if (p.user_id) return h("span", { class: "badge approuve" }, "Compte actif");
+  if (p.courriel) return h("span", { class: "badge soumis" }, "Compte à créer");
+  return h("span", { class: "badge neutre" }, "Sans compte");
+}
+
+function gestionEmployes() {
+  const liste = [...S.profils.values()].sort((a, b) => (b.actif - a.actif) || a.nom.localeCompare(b.nom, "fr"));
+  return h("div", null,
+    h("button", { class: "btn primaire plein", style: { marginBottom: "12px" }, onclick: () => formEmploye() }, "+ Ajouter un employé"),
+    h("div", { class: "carte", style: { padding: 0 } }, liste.map((p) => h("div", { class: "liste-item" + (p.actif ? "" : " inactif"), onclick: () => formEmploye(p) },
+      h("div", { style: { flex: 1, minWidth: 0 } },
+        h("div", { class: "gras" }, p.nom),
+        h("div", { class: "muet petit" }, `Matricule : ${p.matricule || "—"} · Taux : ${p.taux ? fmtArgent(p.taux) + "/h" : "—"}`),
+        p.courriel ? h("div", { class: "muet petit" }, p.courriel) : null),
+      p.role === "admin" ? h("span", { class: "badge admin" }, "Admin") : null,
+      p.actif ? etatCompte(p) : h("span", { class: "badge neutre" }, "Inactif")))),
+    h("div", { class: "alerte info" },
+      h("b", null, "Pour qu’un employé entre ses heures lui-même : "),
+      "entre son courriel dans sa fiche. Il ouvre ensuite l’app (ou l’app punch), touche « Créer mon compte » et utilise ce courriel. Sans courriel, tu peux quand même entrer ses heures toi-même."));
+}
+
+function formEmploye(p) {
+  const nouveau = !p;
+  p = p || { nom: "", role: "employe", actif: true };
+  const moi = !nouveau && p.id === S.moi.id;
+  const nom = h("input", { type: "text", value: p.nom });
+  const courriel = h("input", { type: "email", inputmode: "email", placeholder: "Facultatif", value: p.courriel || "", disabled: Boolean(p.user_id) });
+  const matricule = h("input", { type: "text", value: p.matricule || "" });
+  const taux = h("input", { type: "text", inputmode: "decimal", value: p.taux ? fmtNb(p.taux) : "" });
+  const role = h("select", { value: p.role, disabled: moi },
+    h("option", { value: "employe" }, "Employé — entre ses heures seulement"),
+    h("option", { value: "admin" }, "Administrateur — approuve, rapports, paie"));
+  const actif = h("input", { type: "checkbox", checked: p.actif, disabled: moi });
+  ouvrirModal((fermer) => ({
+    titre: nouveau ? "Ajouter un employé" : p.nom,
+    contenu: h("div", null,
+      h("label", { class: "champ" }, h("span", null, "Nom"), nom),
+      h("label", { class: "champ" }, h("span", null, "Courriel"), courriel,
+        h("div", { class: "muet petit", style: { marginTop: "4px" } }, p.user_id
+          ? "Compte actif : le courriel de connexion se change dans Supabase (Authentication > Users)."
+          : "Avec un courriel, l’employé peut se créer un compte et entrer ses heures lui-même.")),
+      h("div", { class: "rangee" },
+        h("label", { class: "champ" }, h("span", null, "Matricule Employeur D"), matricule),
+        h("label", { class: "champ" }, h("span", null, "Taux horaire ($)"), taux)),
+      h("label", { class: "champ" }, h("span", null, "Rôle"), role),
+      nouveau ? null : h("label", { class: "case" }, actif, h("span", null, "Actif (décoche quand l’employé quitte)"))),
+    actions: [
+      h("button", { class: "btn", onclick: fermer }, "Annuler"),
+      h("button", { class: "btn primaire", onclick: (e) => avecAttente(e.currentTarget, async () => {
+        const t = taux.value.trim() ? lireNombre(taux.value) : null;
+        if (t !== null && !(t >= 0)) { toast("Taux invalide.", "erreur"); return; }
+        if (!nom.value.trim()) { toast("Le nom est requis.", "erreur"); return; }
+        const mail = courriel.value.trim();
+        if (mail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)) { toast("Ce courriel ne semble pas valide.", "erreur"); return; }
+        const donnees = { nom: nom.value.trim(), matricule: matricule.value.trim() || null, taux: t === null ? null : arrondi2(t) };
+        if (!p.user_id) donnees.courriel = mail || null;
+        if (!moi) { donnees.role = role.value; donnees.actif = nouveau ? true : actif.checked; }
+        try {
+          if (nouveau) await q(sb.from("profils").insert(donnees));
+          else await q(sb.from("profils").update(donnees).eq("id", p.id));
+          fermer(); toast(nouveau ? `${donnees.nom} ajouté.` : "Employé enregistré.");
+          if (moi) S.moi = { ...S.moi, ...donnees };
+          await rechargerEtRendre();
+        } catch (err) { erreur(err); }
+      }) }, nouveau ? "Ajouter" : "Enregistrer"),
+    ],
+  }));
+}
+
+/* ---------- Connexion QuickBooks et correspondances ---------- */
+const normNom = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+function trouverUnique(liste, test) { const r = liste.filter(test); return r.length === 1 ? r[0] : null; }
+
+async function gestionQuickBooks() {
+  const st = S.qboStatut;
+  const connecter = (ev) => avecAttente(ev.currentTarget, async () => {
+    try { const r = await appelQbo("connecter"); location.href = r.url; } catch (err) { erreur(err); }
+  });
+  if (!qboConnecte()) {
+    return h("div", { class: "carte" },
+      h("h3", { style: { marginTop: 0 } }, "Connecter QuickBooks"),
+      h("p", { class: "muet" }, "Une fois connectée, l’app envoie les heures approuvées directement dans QuickBooks Online (activités de temps, sur le bon client, avec le code de coût et la description). Plus besoin de les retaper."),
+      h("p", { class: "muet petit" }, "Tu seras envoyé sur la page d’Intuit : connecte-toi à QuickBooks, choisis la compagnie Baume Réno et accepte. Tu reviens ensuite ici automatiquement."),
+      h("button", { class: "btn primaire plein", onclick: connecter }, "Connecter QuickBooks"));
+  }
+
+  const entete = h("div", { class: "carte" },
+    h("div", { class: "ligne-flex", style: { alignItems: "center" } },
+      h("div", { style: { flex: 1, minWidth: 0 } },
+        h("div", { class: "gras" }, "Connecté à ", st.entreprise || "QuickBooks"),
+        h("div", { class: "muet petit" }, `Depuis le ${String(st.connecte_le || "").slice(0, 10)}${st.connecte_par ? ` par ${st.connecte_par}` : ""}${st.environnement === "sandbox" ? " · compagnie de test" : ""}`)),
+      h("span", { class: "badge approuve" }, "Connecté")),
+    h("div", { class: "ligne-flex", style: { marginTop: "12px" } },
+      h("button", { class: "btn", style: { flex: 1 }, onclick: (ev) => avecAttente(ev.currentTarget, async () => {
+        try { await listesQbo(true); toast("Listes QuickBooks à jour."); rendre(); } catch (err) { erreur(err); }
+      }) }, "Actualiser les listes"),
+      h("button", { class: "btn", style: { flex: 1 }, onclick: async () => {
+        if (!await confirmer("Déconnecter QuickBooks ?", "L’app n’enverra plus rien dans QuickBooks tant que tu ne la reconnectes pas. Les heures déjà envoyées restent dans QuickBooks.", "Déconnecter", true)) return;
+        try { await appelQbo("deconnecter"); S.qboListes = null; toast("QuickBooks déconnecté."); await rechargerEtRendre(); } catch (err) { erreur(err); }
+      } }, "Déconnecter")));
+
+  let L;
+  try { L = await listesQbo(); }
+  catch (err) {
+    return h("div", null, entete, h("div", { class: "alerte rouge" }, messageErreur(err), " ",
+      /Reconnecte/i.test(err.message) ? h("button", { class: "btn lien", onclick: connecter }, "Reconnecter") : null));
+  }
+
+  const opt = (valeur, texte, choisi) => h("option", { value: valeur, selected: choisi }, texte);
+  const changements = [];   // fonctions qui renvoient une mise à jour ou null
+
+  // Facturation par défaut
+  const taux = h("input", { type: "text", inputmode: "decimal", value: S.params.taux_facturation != null ? fmtNb(S.params.taux_facturation) : "" });
+  const servDef = h("select", null, opt("", "— Choisir —", !S.params.qbo_item_defaut),
+    L.services.map((x) => opt(x.id, x.nom, x.id === S.params.qbo_item_defaut)));
+  changements.push(() => {
+    const t = taux.value.trim() ? arrondi2(lireNombre(taux.value)) : null;
+    const it = servDef.value || null;
+    if (t === (S.params.taux_facturation != null ? Number(S.params.taux_facturation) : null) && it === (S.params.qbo_item_defaut || null)) return null;
+    if (t !== null && !(t >= 0)) throw new Error("Taux de facturation invalide.");
+    return () => q(sb.from("parametres").update({ taux_facturation: t, qbo_item_defaut: it,
+      qbo_item_defaut_nom: it ? (L.services.find((x) => x.id === it) || {}).nom : null }).eq("id", 1));
+  });
+
+  // Chantiers → clients/projets
+  const chantiers = S.chantiers.filter((c) => c.actif).sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+  const selChantier = new Map();
+  const lignesChantiers = chantiers.map((c) => {
+    const sel = h("select", null, opt("", "— Non associé —", !c.qbo_customer_id),
+      L.clients.map((x) => opt(x.id, x.nom + (x.projet ? " (projet)" : ""), x.id === c.qbo_customer_id)));
+    selChantier.set(c.id, sel);
+    changements.push(() => {
+      const v = sel.value || null;
+      if (v === (c.qbo_customer_id || null)) return null;
+      const cl = L.clients.find((x) => x.id === v);
+      return () => q(sb.from("chantiers").update({ qbo_customer_id: v, qbo_nom: cl ? cl.nom : null }).eq("id", c.id));
+    });
+    return h("label", { class: "champ" }, h("span", null, c.nom), sel);
+  });
+
+  // Employés → employé ou fournisseur (sous-traitant)
+  const gens = [...L.employes, ...L.fournisseurs];
+  const employes = [...S.profils.values()].filter((p) => p.actif).sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+  const selEmploye = new Map();
+  const lignesEmployes = employes.map((p) => {
+    const actuel = p.qbo_employee_id ? `${p.qbo_type || "Employee"}:${p.qbo_employee_id}` : "";
+    const sel = h("select", null, opt("", "— Non associé —", !actuel),
+      L.employes.length ? h("optgroup", { label: "Employés" }, L.employes.map((x) => opt(`Employee:${x.id}`, x.nom, `Employee:${x.id}` === actuel))) : null,
+      L.fournisseurs.length ? h("optgroup", { label: "Fournisseurs (sous-traitants)" }, L.fournisseurs.map((x) => opt(`Vendor:${x.id}`, x.nom, `Vendor:${x.id}` === actuel))) : null);
+    selEmploye.set(p.id, sel);
+    changements.push(() => {
+      if (sel.value === actuel) return null;
+      const [type, id] = sel.value ? sel.value.split(":") : [null, null];
+      return () => q(sb.from("profils").update({ qbo_employee_id: id, qbo_type: type }).eq("id", p.id));
+    });
+    return h("label", { class: "champ" }, h("span", null, p.nom), sel);
+  });
+
+  // Codes de coût → service + taux propre (facultatif)
+  const codes = S.codes.filter((c) => c.actif);
+  const selCode = new Map();
+  const lignesCodes = codes.map((c) => {
+    const sel = h("select", { style: { flex: 2 } }, opt("", "Service par défaut", !c.qbo_item_id), L.services.map((x) => opt(x.id, x.nom, x.id === c.qbo_item_id)));
+    const tx = h("input", { type: "text", inputmode: "decimal", placeholder: "Taux défaut", style: { flex: 1 }, value: c.taux_facturation != null ? fmtNb(c.taux_facturation) : "" });
+    selCode.set(c.code, sel);
+    changements.push(() => {
+      const v = sel.value || null;
+      const t = tx.value.trim() ? arrondi2(lireNombre(tx.value)) : null;
+      if (v === (c.qbo_item_id || null) && t === (c.taux_facturation != null ? Number(c.taux_facturation) : null)) return null;
+      if (t !== null && !(t >= 0)) throw new Error(`Taux invalide pour le code ${c.code}.`);
+      return () => q(sb.from("codes_cout").update({ qbo_item_id: v, taux_facturation: t }).eq("code", c.code));
+    });
+    return h("div", { class: "champ" }, h("span", { class: "petit" }, h("b", null, c.code), " ", c.libelle),
+      h("div", { class: "ligne-flex" }, sel, tx));
+  });
+  const nbCodesPerso = codes.filter((c) => c.qbo_item_id || c.taux_facturation != null).length;
+
+  const associerAuto = () => {
+    let n = 0;
+    for (const c of chantiers) {
+      const sel = selChantier.get(c.id); if (sel.value) continue;
+      const m = trouverUnique(L.clients, (x) => normNom(x.nom) === normNom(c.qbo_nom))
+        || trouverUnique(L.clients, (x) => normNom(x.affichage) === normNom(c.nom) || normNom(x.nom.split(":").pop()) === normNom(c.nom))
+        || trouverUnique(L.clients, (x) => normNom(x.nom).includes(normNom(c.nom)));
+      if (m) { sel.value = m.id; n++; }
+    }
+    for (const p of employes) {
+      const sel = selEmploye.get(p.id); if (sel.value) continue;
+      const nn = normNom(p.nom);
+      const m = trouverUnique(gens, (x) => normNom(x.nom) === nn) || trouverUnique(gens, (x) => normNom(x.nom).split(" ").includes(nn));
+      if (m) { sel.value = `${m.type}:${m.id}`; n++; }
+    }
+    for (const c of codes) {
+      const sel = selCode.get(c.code); if (sel.value) continue;
+      const m = trouverUnique(L.services, (x) => normNom(x.nom).includes(normNom(c.code)));
+      if (m) { sel.value = m.id; n++; }
+    }
+    toast(n ? `${n} correspondance${n > 1 ? "s" : ""} trouvée${n > 1 ? "s" : ""}. Vérifie puis enregistre.` : "Rien de plus à associer automatiquement.");
+  };
+
+  const enregistrer = (ev) => avecAttente(ev.currentTarget, async () => {
+    try {
+      const maj = changements.map((f) => f()).filter(Boolean);
+      if (!maj.length) { toast("Aucun changement."); return; }
+      for (const f of maj) await f();
+      toast(`${maj.length} changement${maj.length > 1 ? "s" : ""} enregistré${maj.length > 1 ? "s" : ""}.`);
+      await rechargerEtRendre();
+    } catch (err) { erreur(err); }
+  });
+
+  const manqueEmp = employes.filter((p) => !p.qbo_employee_id).length;
+  const manqueCh = chantiers.filter((c) => !c.qbo_customer_id).length;
+  return h("div", null,
+    entete,
+    manqueEmp || manqueCh || !S.params.qbo_item_defaut ? h("div", { class: "alerte jaune" },
+      "À faire avant d’envoyer : ", [
+        !S.params.qbo_item_defaut ? "choisir le service par défaut" : null,
+        manqueCh ? `associer ${manqueCh} chantier${manqueCh > 1 ? "s" : ""}` : null,
+        manqueEmp ? `associer ${manqueEmp} employé${manqueEmp > 1 ? "s" : ""}` : null].filter(Boolean).join(", "), ".") : null,
+    h("button", { class: "btn plein", style: { marginBottom: "12px" }, onclick: associerAuto }, "Associer automatiquement par nom"),
+    h("div", { class: "section-titre" }, "Facturation"),
+    h("div", { class: "carte" },
+      h("label", { class: "champ" }, h("span", null, "Service QuickBooks par défaut (main-d’œuvre)"), servDef,
+        h("div", { class: "muet petit", style: { marginTop: "4px" } }, "Utilisé pour toutes les heures, sauf les codes qui ont leur propre service plus bas.")),
+      h("label", { class: "champ" }, h("span", null, "Taux de facturation par défaut ($/h)"), taux)),
+    h("div", { class: "section-titre" }, "Chantiers → clients/projets QuickBooks"),
+    h("div", { class: "carte" }, lignesChantiers.length ? lignesChantiers : h("div", { class: "vide" }, "Aucun chantier actif.")),
+    h("div", { class: "section-titre" }, "Employés → QuickBooks"),
+    h("div", { class: "carte" }, lignesEmployes,
+      h("div", { class: "muet petit" }, "Un employé doit exister dans QuickBooks (Paie › Employés) ou comme fournisseur s’il est sous-traitant.")),
+    h("details", { class: "carte", open: nbCodesPerso > 0 },
+      h("summary", { class: "gras", style: { cursor: "pointer" } }, `Codes de coût : service et taux propres (facultatif${nbCodesPerso ? `, ${nbCodesPerso} réglé${nbCodesPerso > 1 ? "s" : ""}` : ""})`),
+      h("p", { class: "muet petit" }, "Laisse vide pour utiliser le service et le taux par défaut. Ex. : aménagement paysager à 70 $/h."),
+      lignesCodes),
+    h("button", { class: "btn primaire plein", style: { marginTop: "12px" }, onclick: enregistrer }, "Enregistrer les correspondances"));
+}
+
+function gestionParametres() {
+  const nomEnt = h("input", { type: "text", value: S.params.nom_entreprise || "" });
+  const noCie = h("input", { type: "text", value: S.params.no_compagnie || "" });
+  const code = h("input", { type: "text", value: S.params.code_gain || "" });
+  return h("div", { class: "carte" },
+    h("label", { class: "champ" }, h("span", null, "Nom de l’entreprise (affiché en haut de l’app)"), nomEnt),
+    h("label", { class: "champ" }, h("span", null, "Employeur D — numéro de compagnie"), noCie,
+      h("div", { class: "muet petit", style: { marginTop: "4px" } }, "Paie > Paramètres de compagnie > Identification")),
+    h("label", { class: "champ" }, h("span", null, "Employeur D — code de gain (heures régulières)"), code,
+      h("div", { class: "muet petit", style: { marginTop: "4px" } }, "Voir le « Canevas d’importation – Transaction de paie » dans l’aide d’Employeur D")),
+    h("button", { class: "btn primaire plein", onclick: (e) => avecAttente(e.currentTarget, async () => {
+      try {
+        await q(sb.from("parametres").update({ nom_entreprise: nomEnt.value.trim(), no_compagnie: noCie.value.trim(), code_gain: code.value.trim(), updated_at: new Date().toISOString() }).eq("id", 1));
+        toast("Paramètres enregistrés."); await rechargerEtRendre();
+      } catch (err) { erreur(err); }
+    }) }, "Enregistrer"));
+}
+
+const VUES = { heures: vueMesHeures, approbation: vueApprobation, rapports: vueRapports, paie: vueExports, gestion: vueGestion };
+
+/* =====================================================================
+   Démarrage
+   ===================================================================== */
+async function surSession(session) {
+  const etaitConnecte = S.session && S.session.user.id;
+  S.session = session;
+  if (!session) { S.moi = null; S.profils = new Map(); rendre(); return; }
+  if (etaitConnecte === session.user.id && S.moi) return; // simple renouvellement du jeton
+  try {
+    const moi = await q(sb.from("profils").select("*").eq("user_id", session.user.id).maybeSingle());
+    if (!moi || !moi.actif) {
+      await sb.auth.signOut();
+      toast(moi ? "Ce compte est désactivé." : "Profil introuvable. Avise le bureau.", "erreur");
+      return;
+    }
+    S.moi = moi;
+    document.querySelectorAll(".toast").forEach((t) => t.remove());
+    await chargerReferences();
+    await compterEnAttente();
+    if (S.retourQbo) { const [m, t] = S.retourQbo; S.retourQbo = null; setTimeout(() => toast(m, t), 300); }
+  } catch (e) { erreur(e); }
+  rendre();
+}
+
+(function demarrer() {
+  if (!configOK) { rendre(); return; }
+  if (!sb) { $("#app").replaceChildren(h("div", { class: "connexion" }, h("h1", null, "Hors ligne"), h("p", { class: "muet" }, "Impossible de charger l’app. Vérifie ta connexion Internet puis recharge la page."))); return; }
+  const typeLien = new URLSearchParams(location.hash.slice(1)).get("type");
+  const retourQbo = new URLSearchParams(location.search);
+  if (retourQbo.has("qbo")) {
+    const etat = retourQbo.get("qbo"), msg = retourQbo.get("message");
+    history.replaceState(null, "", location.pathname + location.hash);
+    S.vue = "gestion"; S.gestion = "quickbooks";
+    S.retourQbo = etat === "ok" ? ["QuickBooks est connecté !"] : etat === "annule" ? ["Connexion QuickBooks annulée.", "erreur"]
+      : [msg || "La connexion à QuickBooks a échoué.", "erreur"];
+  }
+  if (typeLien === "invite" || typeLien === "recovery") S.aChoisirMdp = true;
+  sb.auth.onAuthStateChange((evenement, session) => {
+    if (evenement === "PASSWORD_RECOVERY") S.aChoisirMdp = true;
+    // différé : éviter d'appeler Supabase à l'intérieur du rappel (blocage connu)
+    setTimeout(() => surSession(session), 0);
+  });
+  // rafraîchit en revenant dans l'app (ex. téléphone sorti de la poche)
+  document.addEventListener("visibilitychange", async () => {
+    if (document.visibilityState === "visible" && S.moi && !document.querySelector(".modal-fond")) {
+      try { await compterEnAttente(); } catch (e) { /* hors ligne */ }
+      rendre();
+    }
+  });
+  if ("serviceWorker" in navigator && location.protocol === "https:") {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
