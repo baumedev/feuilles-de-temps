@@ -1,7 +1,7 @@
 // Service worker minimal : permet d'installer l'app sur le téléphone.
 // Stratégie « réseau d'abord » : on a toujours la dernière version de l'app,
 // la copie en cache ne sert que si le téléphone est hors ligne.
-const CACHE = "heures-v2";
+const CACHE = "heures-v3";
 const FICHIERS = ["./", "index.html", "punch.html", "config.js", "manifest.json", "manifest-punch.json", "icone.svg", "icone-192.png"];
 
 self.addEventListener("install", (e) => {

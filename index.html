@@ -606,10 +606,44 @@ async function chargerReferences() {
   if (estAdmin()) {
     const profils = await q(sb.from("profils").select("*").order("nom"));
     S.profils = new Map(profils.map((p) => [p.id, p]));
+    try { const { data, error } = await sb.rpc("qbo_statut"); S.qboStatut = error ? null : data; } catch (e) { S.qboStatut = null; }
   } else {
     S.profils = new Map([[S.moi.id, S.moi]]);
   }
 }
+/* ---------- Connexion directe à QuickBooks (fonction serveur « quickbooks ») ---------- */
+const qboConnecte = () => Boolean(S.qboStatut && S.qboStatut.connecte);
+async function appelQbo(action, extra) {
+  let data, error;
+  try { ({ data, error } = await sb.functions.invoke("quickbooks", { body: { action, ...(extra || {}) } })); }
+  catch (e) { error = e; }
+  if (error) {
+    let msg = error.message || String(error);
+    try { const j = await error.context.json(); if (j && j.erreur) msg = j.erreur; } catch (_) { /* pas de détail */ }
+    if (/Failed to send|Failed to fetch|Load failed|NetworkError|404/i.test(msg)) msg = "La fonction QuickBooks ne répond pas. Vérifie qu’elle est installée dans Supabase (Edge Functions › quickbooks).";
+    throw new Error(msg);
+  }
+  if (data && data.ok === false && data.erreur) throw new Error(data.erreur);
+  return data;
+}
+async function listesQbo(forcer) {
+  if (!S.qboListes || forcer) S.qboListes = await appelQbo("listes");
+  return S.qboListes;
+}
+// Ce qui manque pour envoyer ces entrées (vérifié aussi par la fonction serveur)
+function correspondancesManquantes(entrees) {
+  const manque = new Set();
+  for (const e of entrees) {
+    const p = S.profils.get(e.employe_id) || {};
+    const c = S.chantiers.find((x) => x.id === e.chantier_id) || {};
+    const code = codeInfo(e.code_cout) || {};
+    if (!p.qbo_employee_id) manque.add(`l’employé ${p.nom || "?"}`);
+    if (!c.qbo_customer_id) manque.add(`le chantier ${c.nom || "?"}`);
+    if (!code.qbo_item_id && !S.params.qbo_item_defaut) manque.add("un service QuickBooks par défaut");
+  }
+  return [...manque];
+}
+
 async function compterEnAttente() {
   if (!estAdmin()) return;
   const rangees = await toutes(() => sb.from("entrees").select("groupe").eq("statut", "soumis"));
@@ -969,11 +1003,21 @@ function formEntree({ entree, date, employeId }) {
 
     const annulerTransfert = verrouille && admin ? h("button", { class: "btn danger", onclick: async () => {
       if (!(await confirmer("Annuler le transfert QuickBooks ?",
-        "Ces heures redeviendront modifiables dans l’app. L’app ne touche pas à QuickBooks : si les heures ou la facture doivent changer, corrige-les aussi là-bas.",
+        entree.lignes.some((l) => l.qbo_time_activity_id)
+          ? "Ces heures seront retirées de QuickBooks et redeviendront modifiables dans l’app. Impossible si elles sont déjà sur une facture : retire-les d’abord de la facture."
+          : "Ces heures redeviendront modifiables dans l’app. L’app ne touche pas à QuickBooks : si les heures ou la facture doivent changer, corrige-les aussi là-bas.",
         "Annuler le transfert", true))) return;
       try {
-        await q(sb.from("entrees").update({ exporte_qbo_le: null }).in("id", entree.ids));
-        fermer(); toast("Transfert annulé. Les heures sont de nouveau modifiables."); rendre();
+        const envoyeeDirect = entree.lignes.some((l) => l.qbo_time_activity_id);
+        if (envoyeeDirect) {
+          const r = await appelQbo("annuler", { ids: entree.ids });
+          if (r.erreurs && r.erreurs.length) { toast(r.erreurs[0].message, "erreur"); fermer(); rendre(); return; }
+        } else {
+          await q(sb.from("entrees").update({ exporte_qbo_le: null }).in("id", entree.ids));
+        }
+        fermer();
+        toast(envoyeeDirect ? "Heures retirées de QuickBooks. Elles sont de nouveau modifiables." : "Transfert annulé. Les heures sont de nouveau modifiables.");
+        rendre();
       } catch (err) { erreur(err); }
     } }, "Annuler le transfert") : null;
 
@@ -1480,10 +1524,45 @@ async function vueQuickBooks() {
   for (const e of aTransferer) parChantier.set(e.chantier_id, (parChantier.get(e.chantier_id) || []).concat(e));
   const lignes = [...parChantier.entries()].map(([id, liste]) => {
     const c = S.chantiers.find((x) => x.id === id) || {};
-    return { nom: nomChantier(id), client: c.qbo_nom || c.client || "", lie: Boolean(c.qbo_nom), heures: somme(liste, (e) => e.heures), facturables: somme(liste.filter((e) => e.facturable), (e) => e.heures) };
+    return { nom: nomChantier(id), client: c.qbo_nom || c.client || "", lie: Boolean(qboConnecte() ? c.qbo_customer_id : c.qbo_nom), heures: somme(liste, (e) => e.heures), facturables: somme(liste.filter((e) => e.facturable), (e) => e.heures) };
   }).sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
 
   const totalH = somme(aTransferer, (e) => e.heures);
+  const direct = qboConnecte();
+  const manquants = direct ? correspondancesManquantes(aTransferer) : [];
+
+  // Envoi direct dans QuickBooks (connexion active)
+  const envoyer = (ev) => avecAttente(ev.currentTarget, async () => {
+    const nb = grouper(aTransferer).length;
+    const ok = await confirmer("Envoyer à QuickBooks ?",
+      `${nb} entrée${nb > 1 ? "s" : ""} (${fmtH(totalH)}) seront créées dans QuickBooks${S.qboStatut.entreprise ? ` (${S.qboStatut.entreprise})` : ""}, puis verrouillées dans l’app.`,
+      "Envoyer");
+    if (!ok) return;
+    try {
+      const ids = aTransferer.map((e) => e.id);
+      let envoyees = 0; const erreurs = []; let manque = [];
+      for (let i = 0; i < ids.length; i += 200) {
+        const r = await appelQbo("envoyer", { ids: ids.slice(i, i + 200) });
+        envoyees += r.envoyees || 0; erreurs.push(...(r.erreurs || [])); manque = manque.concat(r.manquants || []);
+        if (r.manquants && r.manquants.length) break;
+      }
+      if (manque.length) {
+        ouvrirModal((fermer) => ({ titre: "Correspondances à faire", contenu: h("div", null,
+          h("p", null, "Rien n’a été envoyé. Associe d’abord à QuickBooks :"), h("ul", null, manque.map((m) => h("li", null, m)))),
+          actions: [h("button", { class: "btn", onclick: fermer }, "Fermer"),
+            h("button", { class: "btn primaire", onclick: () => { fermer(); S.gestion = "quickbooks"; allerA("gestion"); } }, "Les associer")] }));
+      } else if (erreurs.length) {
+        ouvrirModal((fermer) => ({ titre: `${envoyees} envoyée${envoyees > 1 ? "s" : ""}, ${erreurs.length} refusée${erreurs.length > 1 ? "s" : ""}`, contenu: h("div", null,
+          h("p", null, "QuickBooks a refusé ces lignes. Elles restent à envoyer :"),
+          h("ul", null, erreurs.map((x) => { const e = aTransferer.find((y) => y.id === x.id) || {}; return h("li", null, h("b", null, `${nomEmploye(e.employe_id)}, ${e.date} : `), x.message); }))),
+          actions: [h("button", { class: "btn primaire", onclick: fermer }, "OK")] }));
+      } else {
+        toast(`${envoyees} ligne${envoyees > 1 ? "s" : ""} envoyée${envoyees > 1 ? "s" : ""} à QuickBooks.`);
+      }
+      rendre();
+    } catch (err) { erreur(err); rendre(); }
+  });
+
   const transferer = (ev) => avecAttente(ev.currentTarget, async () => {
     const ok = await confirmer("Transférer à QuickBooks ?",
       `${grouper(aTransferer).length} entrée${grouper(aTransferer).length > 1 ? "s" : ""} (${fmtH(totalH)}) seront verrouillées : les employés ne pourront plus les modifier. Le fichier des heures sera téléchargé pour les entrer dans QuickBooks.`,
@@ -1508,7 +1587,9 @@ async function vueQuickBooks() {
       h("p", { class: "muet petit", style: { margin: 0 } }, "Seules les heures approuvées sont transférées. Une fois transférées, elles sont verrouillées pour tout le monde.")),
     enAttente.length ? h("div", { class: "alerte jaune" }, `${fmtH(somme(enAttente, (e) => e.heures))} encore en attente d’approbation ne seront pas transférées. `,
       h("button", { class: "btn lien", onclick: () => { S.semaineAdmin = lundiDe(versDate(Q.debut)); allerA("approbation"); } }, "Aller approuver")) : null,
-    lignes.some((l) => !l.lie) ? h("div", { class: "alerte jaune" }, "Certains chantiers ne sont pas associés à un client/projet QuickBooks. ",
+    direct && manquants.length ? h("div", { class: "alerte rouge" }, "Avant d’envoyer, associe à QuickBooks : ", manquants.join(", "), ". ",
+      h("button", { class: "btn lien", onclick: () => { S.gestion = "quickbooks"; allerA("gestion"); } }, "Les associer")) : null,
+    !direct && lignes.some((l) => !l.lie) ? h("div", { class: "alerte jaune" }, "Certains chantiers ne sont pas associés à un client/projet QuickBooks. ",
       h("button", { class: "btn lien", onclick: () => { S.gestion = "chantiers"; allerA("gestion"); } }, "Les associer")) : null,
     refusees.length ? h("div", { class: "alerte jaune" }, `${refusees.length} entrée${refusees.length > 1 ? "s refusées attendent" : " refusée attend"} une correction de l’employé.`) : null,
     h("div", { class: "carte" },
@@ -1525,24 +1606,32 @@ async function vueQuickBooks() {
             h("td", { class: "num" }, fmtNb(totalH)),
             h("td", { class: "num" }, fmtNb(somme(lignes, (l) => l.facturables)))))))
         : h("div", { class: "vide" }, deja.length ? "Tout est déjà transféré pour cette période." : "Aucune heure approuvée à transférer pour cette période.")),
-    h("button", { class: "btn primaire plein", disabled: !aTransferer.length, onclick: transferer, style: { marginBottom: "8px" } },
-      aTransferer.length ? `Transférer à QuickBooks (${fmtH(totalH)})` : "Transférer à QuickBooks"),
+    direct
+      ? h("button", { class: "btn primaire plein", disabled: !aTransferer.length || manquants.length > 0, onclick: envoyer, style: { marginBottom: "8px" } },
+          aTransferer.length ? `Envoyer à QuickBooks (${fmtH(totalH)})` : "Envoyer à QuickBooks")
+      : h("button", { class: "btn primaire plein", disabled: !aTransferer.length, onclick: transferer, style: { marginBottom: "8px" } },
+          aTransferer.length ? `Transférer à QuickBooks (${fmtH(totalH)})` : "Transférer à QuickBooks"),
     deja.length ? h("div", { class: "carte ligne-flex", style: { marginTop: "6px" } },
       h("span", { class: "badge qbo" }, "🔒 QuickBooks"),
       h("span", { class: "espace muet petit" }, `${fmtH(somme(deja, (e) => e.heures))} déjà transférées (${grouper(deja).length} entrée${grouper(deja).length > 1 ? "s" : ""})`),
       h("button", { class: "btn petit", onclick: () => telecharger(`quickbooks_deja_transferees_${Q.debut}_au_${Q.fin}.csv`, csvQuickBooks(deja), "text/csv;charset=utf-8") }, "Retélécharger")) : null,
-    h("div", { class: "alerte info", style: { marginTop: "14px" } },
-      h("b", null, "Pour l’instant : "),
-      "l’app n’est pas encore branchée directement sur QuickBooks. Le bouton verrouille les heures et te donne un fichier (par chantier et par employé) pour les entrer dans QuickBooks. Quand la connexion sera faite, ce même bouton les enverra directement."));
+    direct
+      ? h("div", { class: "alerte info", style: { marginTop: "14px" } },
+          h("b", null, `Connecté à ${S.qboStatut.entreprise || "QuickBooks"}. `),
+          "Chaque ligne devient une activité de temps dans QuickBooks, sur le bon client, avec son code et sa description. Les heures facturables apparaissent ensuite quand tu crées la facture du client.")
+      : h("div", { class: "alerte info", style: { marginTop: "14px" } },
+          h("b", null, "Sans connexion directe : "),
+          "le bouton verrouille les heures et te donne un fichier pour les entrer dans QuickBooks. Pour envoyer directement, connecte QuickBooks dans ",
+          h("button", { class: "btn lien", onclick: () => { S.gestion = "quickbooks"; allerA("gestion"); } }, "Gestion › QuickBooks"), "."));
 }
 
 /* =====================================================================
    Vue : Gestion (admin)
    ===================================================================== */
 async function vueGestion() {
-  const onglets = [["chantiers", "Chantiers"], ["codes", "Codes"], ["employes", "Employés"], ["parametres", "Paramètres"]];
-  const contenu = S.gestion === "employes" ? gestionEmployes() : S.gestion === "parametres" ? gestionParametres()
-    : S.gestion === "codes" ? gestionCodes() : gestionChantiers();
+  const onglets = [["chantiers", "Chantiers"], ["codes", "Codes"], ["employes", "Employés"], ["quickbooks", "QuickBooks"], ["parametres", "Paramètres"]];
+  const contenu = await (S.gestion === "employes" ? gestionEmployes() : S.gestion === "parametres" ? gestionParametres()
+    : S.gestion === "codes" ? gestionCodes() : S.gestion === "quickbooks" ? gestionQuickBooks() : gestionChantiers());
   return h("div", null,
     h("div", { class: "onglets" }, onglets.map(([cle, nom]) =>
       h("button", { class: S.gestion === cle ? "actif" : "", onclick: () => { S.gestion = cle; rendre(); } }, nom))),
@@ -1555,19 +1644,21 @@ function gestionChantiers() {
   const liste = S.chantiers.filter((c) => S.afficherArchives || c.actif)
     .sort((a, b) => (b.actif - a.actif) || a.nom.localeCompare(b.nom, "fr"));
   const nbArchives = S.chantiers.filter((c) => !c.actif).length;
-  const nonLies = S.chantiers.filter((c) => c.actif && !c.qbo_nom).length;
+  const lieQbo = (c) => qboConnecte() ? Boolean(c.qbo_customer_id) : Boolean(c.qbo_nom);
+  const nonLies = S.chantiers.filter((c) => c.actif && !lieQbo(c)).length;
   return h("div", null,
     h("div", { class: "ligne-flex", style: { marginBottom: "12px" } },
       h("button", { class: "btn primaire", style: { flex: 1 }, onclick: () => formChantier() }, "+ Nouveau chantier"),
       h("button", { class: "btn", style: { flex: 1 }, onclick: importerQuickBooks }, "Importer de QuickBooks")),
-    nonLies ? h("div", { class: "alerte jaune" }, `${nonLies} chantier${nonLies > 1 ? "s actifs ne sont pas associés" : " actif n’est pas associé"} à un client/projet QuickBooks. Touche-le pour entrer son nom QuickBooks, ou importe ta liste.`) : null,
+    nonLies ? h("div", { class: "alerte jaune" }, `${nonLies} chantier${nonLies > 1 ? "s actifs ne sont pas associés" : " actif n’est pas associé"} à un client/projet QuickBooks. `,
+      qboConnecte() ? h("button", { class: "btn lien", onclick: () => { S.gestion = "quickbooks"; rendre(); } }, "Les associer") : "Touche-le pour entrer son nom QuickBooks, ou importe ta liste.") : null,
     h("div", { class: "carte", style: { padding: 0 } },
       liste.length ? liste.map((c) => h("div", { class: "liste-item" + (c.actif ? "" : " inactif"), onclick: () => formChantier(c) },
         h("div", { style: { flex: 1, minWidth: 0 } },
           h("div", { class: "gras" }, c.nom),
           c.client || c.adresse ? h("div", { class: "muet petit" }, [c.client, c.adresse].filter(Boolean).join(" · ")) : null,
           c.qbo_nom ? h("div", { class: "petit", style: { color: "#1e4e8c" } }, "QuickBooks : ", c.qbo_nom) : null),
-        !c.qbo_nom && c.actif ? h("span", { class: "badge soumis" }, "Pas lié à QBO") : null,
+        !lieQbo(c) && c.actif ? h("span", { class: "badge soumis" }, "Pas lié à QBO") : null,
         !c.facturable ? h("span", { class: "badge neutre" }, "Non facturable") : null,
         !c.actif ? h("span", { class: "badge neutre" }, "Archivé") : null))
         : h("div", { class: "vide" }, "Aucun chantier. Importe ta liste de QuickBooks ou ajoute ton premier chantier.")),
@@ -1579,7 +1670,7 @@ function formChantier(c) {
   const nouveau = !c;
   const nom = h("input", { type: "text", required: true, value: c ? c.nom : "" });
   const client = h("input", { type: "text", value: c ? c.client || "" : "" });
-  const qboNom = h("input", { type: "text", placeholder: "ex. Dupont:Rénovation cuisine", value: c ? c.qbo_nom || "" : "" });
+  const qboNom = h("input", { type: "text", placeholder: "ex. Dupont:Rénovation cuisine", value: c ? c.qbo_nom || "" : "", disabled: qboConnecte() });
   const adresse = h("input", { type: "text", value: c ? c.adresse || "" : "" });
   const facturable = h("input", { type: "checkbox", checked: c ? c.facturable : true });
   const actif = h("input", { type: "checkbox", checked: c ? c.actif : true });
@@ -1589,7 +1680,7 @@ function formChantier(c) {
       h("label", { class: "champ" }, h("span", null, "Nom du chantier"), nom),
       h("label", { class: "champ" }, h("span", null, "Client"), client),
       h("label", { class: "champ" }, h("span", null, "Client/projet dans QuickBooks (nom exact)"), qboNom,
-        h("div", { class: "muet petit", style: { marginTop: "4px" } }, "Tel qu’il apparaît dans QuickBooks. Pour un projet ou sous-client : Client:Projet.")),
+        h("div", { class: "muet petit", style: { marginTop: "4px" } }, qboConnecte() ? "Se choisit dans Gestion › QuickBooks." : "Tel qu’il apparaît dans QuickBooks. Pour un projet ou sous-client : Client:Projet.")),
       h("label", { class: "champ" }, h("span", null, "Adresse"), adresse),
       h("label", { class: "case" }, facturable, h("span", null, "Heures facturables au client par défaut")),
       nouveau ? null : h("label", { class: "case" }, actif, h("span", null, "Actif (décoche pour archiver un chantier terminé)"))),
@@ -1597,7 +1688,7 @@ function formChantier(c) {
       h("button", { class: "btn", onclick: fermer }, "Annuler"),
       h("button", { class: "btn primaire", onclick: (e) => avecAttente(e.currentTarget, async () => {
         if (!nom.value.trim()) { toast("Le nom est requis.", "erreur"); return; }
-        const donnees = { nom: nom.value.trim(), client: client.value.trim() || null, qbo_nom: qboNom.value.trim() || null,
+        const donnees = { nom: nom.value.trim(), client: client.value.trim() || null, ...(qboConnecte() ? {} : { qbo_nom: qboNom.value.trim() || null }),
           adresse: adresse.value.trim() || null, facturable: facturable.checked, actif: nouveau ? true : actif.checked };
         try {
           if (nouveau) await q(sb.from("chantiers").insert(donnees));
@@ -1648,7 +1739,7 @@ function importerQuickBooks() {
 
   const afficher = () => {
     const cases = items.map((it) => {
-      const lie = S.chantiers.find((c) => c.qbo_nom && c.qbo_nom.toLowerCase() === it.qboNom.toLowerCase());
+      const lie = S.chantiers.find((c) => (it.qboId && c.qbo_customer_id === it.qboId) || (c.qbo_nom && c.qbo_nom.toLowerCase() === it.qboNom.toLowerCase()));
       const memeNom = !lie && S.chantiers.find((c) => !c.qbo_nom && c.nom.toLowerCase() === it.nom.toLowerCase());
       it.action = lie ? "deja" : memeNom ? "associer" : "nouveau";
       it.chantierId = memeNom ? memeNom.id : null;
@@ -1691,17 +1782,27 @@ function importerQuickBooks() {
       const choisis = items.filter((i) => i.choisi && i.action !== "deja");
       try {
         const nouveaux = choisis.filter((i) => i.action === "nouveau")
-          .map((i) => ({ nom: i.nom, client: i.client !== i.nom ? i.client : null, qbo_nom: i.qboNom, facturable: true, actif: true }));
+          .map((i) => ({ nom: i.nom, client: i.client !== i.nom ? i.client : null, qbo_nom: i.qboNom, qbo_customer_id: i.qboId || null, facturable: true, actif: true }));
         if (nouveaux.length) await q(sb.from("chantiers").insert(nouveaux));
         for (const i of choisis.filter((x) => x.action === "associer")) {
-          await q(sb.from("chantiers").update({ qbo_nom: i.qboNom }).eq("id", i.chantierId));
+          await q(sb.from("chantiers").update(i.qboId ? { qbo_nom: i.qboNom, qbo_customer_id: i.qboId } : { qbo_nom: i.qboNom }).eq("id", i.chantierId));
         }
         fermer(); toast(`${choisis.length} chantier${choisis.length > 1 ? "s" : ""} importé${choisis.length > 1 ? "s" : ""}.`); await rechargerEtRendre();
       } catch (err) { erreur(err); }
     }));
     return {
       titre: "Importer de QuickBooks",
-      contenu: h("div", null,
+      contenu: qboConnecte() ? h("div", null,
+        h("button", { class: "btn primaire plein", style: { marginBottom: "12px" }, onclick: (ev) => avecAttente(ev.currentTarget, async () => {
+          try {
+            const L = await listesQbo(true);
+            items = L.clients.map((x) => { const parties = x.nom.split(":").map((t) => t.trim()).filter(Boolean);
+              return { qboId: x.id, qboNom: x.nom, nom: parties[parties.length - 1], client: parties[0], choisi: x.projet || parties.length > 1 ? undefined : false }; });
+            afficher();
+          } catch (err) { erreur(err); }
+        }) }, "Charger la liste de QuickBooks"),
+        h("p", { class: "muet petit" }, "Les projets (Client:Projet) sont cochés d’avance. Coche aussi les clients qui sont eux-mêmes un chantier."),
+        zone) : h("div", null,
         h("div", { class: "alerte info" },
           h("b", null, "Dans QuickBooks : "), "Ventes > Clients, puis l’icône Exporter vers Excel (au-dessus de la liste). Les projets apparaissent sous la forme Client:Projet."),
         h("label", { class: "champ" }, h("span", null, "Fichier exporté (.xlsx, .xls ou .csv)"), fichier),
@@ -1840,6 +1941,174 @@ function formEmploye(p) {
   }));
 }
 
+/* ---------- Connexion QuickBooks et correspondances ---------- */
+const normNom = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+function trouverUnique(liste, test) { const r = liste.filter(test); return r.length === 1 ? r[0] : null; }
+
+async function gestionQuickBooks() {
+  const st = S.qboStatut;
+  const connecter = (ev) => avecAttente(ev.currentTarget, async () => {
+    try { const r = await appelQbo("connecter"); location.href = r.url; } catch (err) { erreur(err); }
+  });
+  if (!qboConnecte()) {
+    return h("div", { class: "carte" },
+      h("h3", { style: { marginTop: 0 } }, "Connecter QuickBooks"),
+      h("p", { class: "muet" }, "Une fois connectée, l’app envoie les heures approuvées directement dans QuickBooks Online (activités de temps, sur le bon client, avec le code de coût et la description). Plus besoin de les retaper."),
+      h("p", { class: "muet petit" }, "Tu seras envoyé sur la page d’Intuit : connecte-toi à QuickBooks, choisis la compagnie Baume Réno et accepte. Tu reviens ensuite ici automatiquement."),
+      h("button", { class: "btn primaire plein", onclick: connecter }, "Connecter QuickBooks"));
+  }
+
+  const entete = h("div", { class: "carte" },
+    h("div", { class: "ligne-flex", style: { alignItems: "center" } },
+      h("div", { style: { flex: 1, minWidth: 0 } },
+        h("div", { class: "gras" }, "Connecté à ", st.entreprise || "QuickBooks"),
+        h("div", { class: "muet petit" }, `Depuis le ${String(st.connecte_le || "").slice(0, 10)}${st.connecte_par ? ` par ${st.connecte_par}` : ""}${st.environnement === "sandbox" ? " · compagnie de test" : ""}`)),
+      h("span", { class: "badge approuve" }, "Connecté")),
+    h("div", { class: "ligne-flex", style: { marginTop: "12px" } },
+      h("button", { class: "btn", style: { flex: 1 }, onclick: (ev) => avecAttente(ev.currentTarget, async () => {
+        try { await listesQbo(true); toast("Listes QuickBooks à jour."); rendre(); } catch (err) { erreur(err); }
+      }) }, "Actualiser les listes"),
+      h("button", { class: "btn", style: { flex: 1 }, onclick: async () => {
+        if (!await confirmer("Déconnecter QuickBooks ?", "L’app n’enverra plus rien dans QuickBooks tant que tu ne la reconnectes pas. Les heures déjà envoyées restent dans QuickBooks.", "Déconnecter", true)) return;
+        try { await appelQbo("deconnecter"); S.qboListes = null; toast("QuickBooks déconnecté."); await rechargerEtRendre(); } catch (err) { erreur(err); }
+      } }, "Déconnecter")));
+
+  let L;
+  try { L = await listesQbo(); }
+  catch (err) {
+    return h("div", null, entete, h("div", { class: "alerte rouge" }, messageErreur(err), " ",
+      /Reconnecte/i.test(err.message) ? h("button", { class: "btn lien", onclick: connecter }, "Reconnecter") : null));
+  }
+
+  const opt = (valeur, texte, choisi) => h("option", { value: valeur, selected: choisi }, texte);
+  const changements = [];   // fonctions qui renvoient une mise à jour ou null
+
+  // Facturation par défaut
+  const taux = h("input", { type: "text", inputmode: "decimal", value: S.params.taux_facturation != null ? fmtNb(S.params.taux_facturation) : "" });
+  const servDef = h("select", null, opt("", "— Choisir —", !S.params.qbo_item_defaut),
+    L.services.map((x) => opt(x.id, x.nom, x.id === S.params.qbo_item_defaut)));
+  changements.push(() => {
+    const t = taux.value.trim() ? arrondi2(lireNombre(taux.value)) : null;
+    const it = servDef.value || null;
+    if (t === (S.params.taux_facturation != null ? Number(S.params.taux_facturation) : null) && it === (S.params.qbo_item_defaut || null)) return null;
+    if (t !== null && !(t >= 0)) throw new Error("Taux de facturation invalide.");
+    return () => q(sb.from("parametres").update({ taux_facturation: t, qbo_item_defaut: it,
+      qbo_item_defaut_nom: it ? (L.services.find((x) => x.id === it) || {}).nom : null }).eq("id", 1));
+  });
+
+  // Chantiers → clients/projets
+  const chantiers = S.chantiers.filter((c) => c.actif).sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+  const selChantier = new Map();
+  const lignesChantiers = chantiers.map((c) => {
+    const sel = h("select", null, opt("", "— Non associé —", !c.qbo_customer_id),
+      L.clients.map((x) => opt(x.id, x.nom + (x.projet ? " (projet)" : ""), x.id === c.qbo_customer_id)));
+    selChantier.set(c.id, sel);
+    changements.push(() => {
+      const v = sel.value || null;
+      if (v === (c.qbo_customer_id || null)) return null;
+      const cl = L.clients.find((x) => x.id === v);
+      return () => q(sb.from("chantiers").update({ qbo_customer_id: v, qbo_nom: cl ? cl.nom : null }).eq("id", c.id));
+    });
+    return h("label", { class: "champ" }, h("span", null, c.nom), sel);
+  });
+
+  // Employés → employé ou fournisseur (sous-traitant)
+  const gens = [...L.employes, ...L.fournisseurs];
+  const employes = [...S.profils.values()].filter((p) => p.actif).sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+  const selEmploye = new Map();
+  const lignesEmployes = employes.map((p) => {
+    const actuel = p.qbo_employee_id ? `${p.qbo_type || "Employee"}:${p.qbo_employee_id}` : "";
+    const sel = h("select", null, opt("", "— Non associé —", !actuel),
+      L.employes.length ? h("optgroup", { label: "Employés" }, L.employes.map((x) => opt(`Employee:${x.id}`, x.nom, `Employee:${x.id}` === actuel))) : null,
+      L.fournisseurs.length ? h("optgroup", { label: "Fournisseurs (sous-traitants)" }, L.fournisseurs.map((x) => opt(`Vendor:${x.id}`, x.nom, `Vendor:${x.id}` === actuel))) : null);
+    selEmploye.set(p.id, sel);
+    changements.push(() => {
+      if (sel.value === actuel) return null;
+      const [type, id] = sel.value ? sel.value.split(":") : [null, null];
+      return () => q(sb.from("profils").update({ qbo_employee_id: id, qbo_type: type }).eq("id", p.id));
+    });
+    return h("label", { class: "champ" }, h("span", null, p.nom), sel);
+  });
+
+  // Codes de coût → service + taux propre (facultatif)
+  const codes = S.codes.filter((c) => c.actif);
+  const selCode = new Map();
+  const lignesCodes = codes.map((c) => {
+    const sel = h("select", { style: { flex: 2 } }, opt("", "Service par défaut", !c.qbo_item_id), L.services.map((x) => opt(x.id, x.nom, x.id === c.qbo_item_id)));
+    const tx = h("input", { type: "text", inputmode: "decimal", placeholder: "Taux défaut", style: { flex: 1 }, value: c.taux_facturation != null ? fmtNb(c.taux_facturation) : "" });
+    selCode.set(c.code, sel);
+    changements.push(() => {
+      const v = sel.value || null;
+      const t = tx.value.trim() ? arrondi2(lireNombre(tx.value)) : null;
+      if (v === (c.qbo_item_id || null) && t === (c.taux_facturation != null ? Number(c.taux_facturation) : null)) return null;
+      if (t !== null && !(t >= 0)) throw new Error(`Taux invalide pour le code ${c.code}.`);
+      return () => q(sb.from("codes_cout").update({ qbo_item_id: v, taux_facturation: t }).eq("code", c.code));
+    });
+    return h("div", { class: "champ" }, h("span", { class: "petit" }, h("b", null, c.code), " ", c.libelle),
+      h("div", { class: "ligne-flex" }, sel, tx));
+  });
+  const nbCodesPerso = codes.filter((c) => c.qbo_item_id || c.taux_facturation != null).length;
+
+  const associerAuto = () => {
+    let n = 0;
+    for (const c of chantiers) {
+      const sel = selChantier.get(c.id); if (sel.value) continue;
+      const m = trouverUnique(L.clients, (x) => normNom(x.nom) === normNom(c.qbo_nom))
+        || trouverUnique(L.clients, (x) => normNom(x.affichage) === normNom(c.nom) || normNom(x.nom.split(":").pop()) === normNom(c.nom))
+        || trouverUnique(L.clients, (x) => normNom(x.nom).includes(normNom(c.nom)));
+      if (m) { sel.value = m.id; n++; }
+    }
+    for (const p of employes) {
+      const sel = selEmploye.get(p.id); if (sel.value) continue;
+      const nn = normNom(p.nom);
+      const m = trouverUnique(gens, (x) => normNom(x.nom) === nn) || trouverUnique(gens, (x) => normNom(x.nom).split(" ").includes(nn));
+      if (m) { sel.value = `${m.type}:${m.id}`; n++; }
+    }
+    for (const c of codes) {
+      const sel = selCode.get(c.code); if (sel.value) continue;
+      const m = trouverUnique(L.services, (x) => normNom(x.nom).includes(normNom(c.code)));
+      if (m) { sel.value = m.id; n++; }
+    }
+    toast(n ? `${n} correspondance${n > 1 ? "s" : ""} trouvée${n > 1 ? "s" : ""}. Vérifie puis enregistre.` : "Rien de plus à associer automatiquement.");
+  };
+
+  const enregistrer = (ev) => avecAttente(ev.currentTarget, async () => {
+    try {
+      const maj = changements.map((f) => f()).filter(Boolean);
+      if (!maj.length) { toast("Aucun changement."); return; }
+      for (const f of maj) await f();
+      toast(`${maj.length} changement${maj.length > 1 ? "s" : ""} enregistré${maj.length > 1 ? "s" : ""}.`);
+      await rechargerEtRendre();
+    } catch (err) { erreur(err); }
+  });
+
+  const manqueEmp = employes.filter((p) => !p.qbo_employee_id).length;
+  const manqueCh = chantiers.filter((c) => !c.qbo_customer_id).length;
+  return h("div", null,
+    entete,
+    manqueEmp || manqueCh || !S.params.qbo_item_defaut ? h("div", { class: "alerte jaune" },
+      "À faire avant d’envoyer : ", [
+        !S.params.qbo_item_defaut ? "choisir le service par défaut" : null,
+        manqueCh ? `associer ${manqueCh} chantier${manqueCh > 1 ? "s" : ""}` : null,
+        manqueEmp ? `associer ${manqueEmp} employé${manqueEmp > 1 ? "s" : ""}` : null].filter(Boolean).join(", "), ".") : null,
+    h("button", { class: "btn plein", style: { marginBottom: "12px" }, onclick: associerAuto }, "Associer automatiquement par nom"),
+    h("div", { class: "section-titre" }, "Facturation"),
+    h("div", { class: "carte" },
+      h("label", { class: "champ" }, h("span", null, "Service QuickBooks par défaut (main-d’œuvre)"), servDef,
+        h("div", { class: "muet petit", style: { marginTop: "4px" } }, "Utilisé pour toutes les heures, sauf les codes qui ont leur propre service plus bas.")),
+      h("label", { class: "champ" }, h("span", null, "Taux de facturation par défaut ($/h)"), taux)),
+    h("div", { class: "section-titre" }, "Chantiers → clients/projets QuickBooks"),
+    h("div", { class: "carte" }, lignesChantiers.length ? lignesChantiers : h("div", { class: "vide" }, "Aucun chantier actif.")),
+    h("div", { class: "section-titre" }, "Employés → QuickBooks"),
+    h("div", { class: "carte" }, lignesEmployes,
+      h("div", { class: "muet petit" }, "Un employé doit exister dans QuickBooks (Paie › Employés) ou comme fournisseur s’il est sous-traitant.")),
+    h("details", { class: "carte", open: nbCodesPerso > 0 },
+      h("summary", { class: "gras", style: { cursor: "pointer" } }, `Codes de coût : service et taux propres (facultatif${nbCodesPerso ? `, ${nbCodesPerso} réglé${nbCodesPerso > 1 ? "s" : ""}` : ""})`),
+      h("p", { class: "muet petit" }, "Laisse vide pour utiliser le service et le taux par défaut. Ex. : aménagement paysager à 70 $/h."),
+      lignesCodes),
+    h("button", { class: "btn primaire plein", style: { marginTop: "12px" }, onclick: enregistrer }, "Enregistrer les correspondances"));
+}
+
 function gestionParametres() {
   const nomEnt = h("input", { type: "text", value: S.params.nom_entreprise || "" });
   const noCie = h("input", { type: "text", value: S.params.no_compagnie || "" });
@@ -1879,6 +2148,7 @@ async function surSession(session) {
     document.querySelectorAll(".toast").forEach((t) => t.remove());
     await chargerReferences();
     await compterEnAttente();
+    if (S.retourQbo) { const [m, t] = S.retourQbo; S.retourQbo = null; setTimeout(() => toast(m, t), 300); }
   } catch (e) { erreur(e); }
   rendre();
 }
@@ -1887,6 +2157,14 @@ async function surSession(session) {
   if (!configOK) { rendre(); return; }
   if (!sb) { $("#app").replaceChildren(h("div", { class: "connexion" }, h("h1", null, "Hors ligne"), h("p", { class: "muet" }, "Impossible de charger l’app. Vérifie ta connexion Internet puis recharge la page."))); return; }
   const typeLien = new URLSearchParams(location.hash.slice(1)).get("type");
+  const retourQbo = new URLSearchParams(location.search);
+  if (retourQbo.has("qbo")) {
+    const etat = retourQbo.get("qbo"), msg = retourQbo.get("message");
+    history.replaceState(null, "", location.pathname + location.hash);
+    S.vue = "gestion"; S.gestion = "quickbooks";
+    S.retourQbo = etat === "ok" ? ["QuickBooks est connecté !"] : etat === "annule" ? ["Connexion QuickBooks annulée.", "erreur"]
+      : [msg || "La connexion à QuickBooks a échoué.", "erreur"];
+  }
   if (typeLien === "invite" || typeLien === "recovery") S.aChoisirMdp = true;
   sb.auth.onAuthStateChange((evenement, session) => {
     if (evenement === "PASSWORD_RECOVERY") S.aChoisirMdp = true;

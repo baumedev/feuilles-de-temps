@@ -446,3 +446,53 @@ drop policy if exists absences_gestion on public.absences;
 create policy absences_gestion on public.absences for all to authenticated
   using (employe_id = public.mon_profil() or public.est_admin())
   with check (employe_id = public.mon_profil() or public.est_admin());
+
+-- =====================================================================
+--  Connexion directe à QuickBooks Online
+--  Les jetons d'accès ne sont lisibles QUE par la fonction serveur
+--  « quickbooks » (clé secrète). L'app ne voit que le statut.
+-- =====================================================================
+alter table public.profils    add column if not exists qbo_type text check (qbo_type in ('Employee', 'Vendor'));
+alter table public.codes_cout add column if not exists taux_facturation numeric(8,2);   -- $/h facturé pour ce code (sinon le taux par défaut)
+alter table public.parametres add column if not exists taux_facturation numeric(8,2) default 90;
+alter table public.parametres add column if not exists qbo_item_defaut text;            -- produit/service QuickBooks par défaut
+alter table public.parametres add column if not exists qbo_item_defaut_nom text;
+
+create table if not exists public.qbo_connexion (
+  id             int primary key default 1 check (id = 1),
+  realm_id       text not null,
+  entreprise     text,
+  environnement  text not null default 'production',
+  access_token   text not null,
+  access_expire  timestamptz not null,
+  refresh_token  text not null,
+  refresh_expire timestamptz,
+  connecte_par   uuid references public.profils(id) on delete set null,
+  connecte_le    timestamptz not null default now(),
+  maj_le         timestamptz not null default now()
+);
+create table if not exists public.qbo_etats (
+  etat       text primary key,
+  profil_id  uuid references public.profils(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+alter table public.qbo_connexion enable row level security;
+alter table public.qbo_etats     enable row level security;
+-- aucune règle d'accès : personne d'autre que la fonction serveur n'y touche
+revoke all on public.qbo_connexion from anon, authenticated;
+revoke all on public.qbo_etats     from anon, authenticated;
+
+-- Statut de la connexion, sans les jetons (administrateurs seulement ; null sinon)
+create or replace function public.qbo_statut()
+returns jsonb
+language sql stable security definer set search_path = public
+as $$
+  select case when not public.est_admin() then null else (
+    select jsonb_build_object(
+      'connecte', true, 'entreprise', c.entreprise, 'realm_id', c.realm_id,
+      'environnement', c.environnement, 'connecte_le', c.connecte_le,
+      'refresh_expire', c.refresh_expire,
+      'connecte_par', (select nom from public.profils p where p.id = c.connecte_par))
+    from public.qbo_connexion c where c.id = 1) end;
+$$;
+grant execute on function public.qbo_statut() to authenticated;
