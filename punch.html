@@ -123,6 +123,22 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .point.refuse { background: var(--rouge); }
 .point.qbo { background: var(--bleu); }
 
+/* Calendrier du mois */
+.cal { padding: 10px 8px; }
+.cal-grille { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-tete { font-size: 11px; font-weight: 700; color: var(--encre-2); text-align: center; padding: 2px 0 4px; text-transform: uppercase; }
+.cal-jour { border: 1px solid var(--ligne); border-radius: 10px; background: #fff; min-height: 58px; padding: 4px; display: flex; flex-direction: column; gap: 2px; text-align: left; min-width: 0; }
+.cal-jour.hors { visibility: hidden; }
+.cal-jour.fds { background: #faf8f3; }
+.cal-jour.auj { border: 2px solid var(--accent); padding: 3px; }
+.cal-num { font-size: 12px; font-weight: 700; color: var(--encre-2); line-height: 1; }
+.cal-h { font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.cal-pts { display: flex; flex-wrap: wrap; gap: 2px; margin-top: auto; }
+.cal-pt { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.cal-abs { font-size: 10px; font-weight: 700; border-radius: 4px; padding: 0 3px; color: #fff; align-self: flex-start; }
+.lg { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 16px; }
+.lg .nom { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+
 /* Assistant */
 .question { font-size: 24px; font-weight: 800; text-wrap: balance; }
 .puces { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -270,7 +286,7 @@ async function attendre(bouton, fn) {
 /* ---------- Données ---------- */
 const S = {
   session: null, moi: null, chantiers: [], codes: [], recents: { chantiers: [], codes: [] },
-  vue: "accueil", semaine: lundiDe(new Date()), jour: null, brouillon: null, etape: 1, creerCompte: false, dernierEnvoi: null,
+  vue: "accueil", modeCal: "semaine", mois: null, semaine: lundiDe(new Date()), jour: null, brouillon: null, etape: 1, creerCompte: false, dernierEnvoi: null,
 };
 const configOK = !CONFIG.SUPABASE_URL.includes("VOTRE-PROJET") && !CONFIG.SUPABASE_ANON_KEY.includes("VOTRE-CLE");
 const sb = configOK && window.supabase ? window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY) : null;
@@ -410,6 +426,67 @@ function carteEntree(g) {
     badge(g), h("span", { class: "h" }, fmtH(g.heures)));
 }
 
+/* ---------- Calendrier du mois ---------- */
+const MOIS_LONGS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+const COULEURS = ["#c2410c", "#15803d", "#1d4ed8", "#7c3aed", "#0e7490", "#a16207", "#be185d", "#4d7c0f", "#9333ea", "#0f766e", "#b45309", "#475569"];
+const COUL_ABS = { maladie: "var(--maladie)", conge: "var(--conge)", ferie: "var(--ferie)" };
+function couleurChantier(id) {
+  const ids = S.chantiers.map((c) => c.id).sort((a, b) => String(a).localeCompare(String(b), "fr", { numeric: true }));
+  const i = ids.indexOf(id);
+  return COULEURS[(i < 0 ? ids.length : i) % COULEURS.length];
+}
+async function sectionMois() {
+  const auj = new Date();
+  if (!S.mois) S.mois = new Date(auj.getFullYear(), auj.getMonth(), 1);
+  const debut = S.mois, fin = new Date(debut.getFullYear(), debut.getMonth() + 1, 0);
+  const [rangees, absences] = await Promise.all([
+    toutes(() => sb.from("entrees").select("*").eq("employe_id", S.moi.id).gte("date", ymd(debut)).lte("date", ymd(fin)).order("date")),
+    toutes(() => sb.from("absences").select("*").eq("employe_id", S.moi.id).gte("date", ymd(debut)).lte("date", ymd(fin))),
+  ]);
+  const parJour = new Map();
+  for (const r of rangees) parJour.set(r.date, (parJour.get(r.date) || []).concat(r));
+  const aujCle = ymd(auj);
+  const enCours = debut.getFullYear() === auj.getFullYear() && debut.getMonth() === auj.getMonth();
+  const changer = (n) => { S.mois = new Date(debut.getFullYear(), debut.getMonth() + n, 1); rendre(); };
+  const cases = [];
+  for (let i = 0; i < (debut.getDay() + 6) % 7; i++) cases.push(h("div", { class: "cal-jour hors", "aria-hidden": "true" }));
+  for (let j = 1; j <= fin.getDate(); j++) {
+    const d = new Date(debut.getFullYear(), debut.getMonth(), j), cle = ymd(d);
+    const l = parJour.get(cle) || [];
+    const hrs = somme(l, (r) => r.heures);
+    const ab = absences.find((a) => a.date === cle);
+    cases.push(h("button", { class: "cal-jour" + (d.getDay() % 6 === 0 ? " fds" : "") + (cle === aujCle ? " auj" : ""),
+      "aria-label": `${dateLongue(d)} : ${hrs ? fmtH(hrs) : "aucune heure"}`, onclick: () => { S.jour = cle; aller("jour"); } },
+      h("span", { class: "cal-num" }, j),
+      hrs ? h("span", { class: "cal-h" }, fmtNb(hrs)) : null,
+      ab ? h("span", { class: "cal-abs", style: { background: COUL_ABS[ab.type] } }, TYPES_ABSENCE[ab.type].slice(0, 3)) : null,
+      l.length ? h("span", { class: "cal-pts" }, [...new Set(l.map((r) => r.chantier_id))].slice(0, 4).map((id) =>
+        h("span", { class: "cal-pt", style: { background: couleurChantier(id) } }))) : null));
+  }
+  const parCh = new Map();
+  for (const r of rangees) parCh.set(r.chantier_id, (parCh.get(r.chantier_id) || 0) + Number(r.heures));
+  const lignes = [...parCh.entries()].sort((a, b) => b[1] - a[1]);
+  return h("section", null,
+    h("div", { class: "semaine-nav", style: { marginBottom: "10px" } },
+      h("button", { "aria-label": "Mois précédent", onclick: () => changer(-1) }, "‹"),
+      h("div", { class: "lib" }, majuscule(`${MOIS_LONGS[debut.getMonth()]} ${debut.getFullYear()}`),
+        h("div", { class: "muet petit", style: { fontWeight: 400 } }, `${fmtH(somme(rangees, (r) => r.heures))} · ${parJour.size} jour${parJour.size > 1 ? "s" : ""} travaillé${parJour.size > 1 ? "s" : ""}`)),
+      h("button", { "aria-label": "Mois suivant", onclick: () => changer(1) }, "›")),
+    h("div", { class: "carte cal" }, h("div", { class: "cal-grille" },
+      ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((j) => h("div", { class: "cal-tete" }, j)), cases)),
+    lignes.length ? h("div", { class: "carte", style: { marginTop: "12px", padding: "10px 16px" } },
+      h("div", { class: "etiquette", style: { marginBottom: "4px" } }, "Mes chantiers ce mois-ci"),
+      lignes.map(([id, hrs]) => h("div", { class: "lg" },
+        h("span", { class: "cal-pt", style: { background: couleurChantier(id), width: "12px", height: "12px" } }),
+        h("span", { class: "nom" }, nomChantier(id)), h("b", null, fmtH(hrs))))) : null,
+    !enCours ? h("button", { class: "btn lien", style: { margin: "6px auto 0", display: "block" }, onclick: () => { S.mois = null; rendre(); } }, "Revenir à ce mois-ci") : null);
+}
+function choixModeCal() {
+  return h("div", { class: "segment", style: { marginBottom: "10px" } },
+    [["semaine", "Semaine"], ["mois", "Mois"]].map(([cle, nom]) =>
+      h("button", { class: S.modeCal === cle ? "actif" : "", "aria-pressed": String(S.modeCal === cle), onclick: () => { S.modeCal = cle; rendre(); } }, nom)));
+}
+
 async function vueAccueil() {
   const lundi = S.semaine;
   const { groupes, rangees, absences } = await chargerSemaine(lundi);
@@ -419,6 +496,7 @@ async function vueAccueil() {
   const absAuj = absences.find((a) => a.date === auj);
   const aCorriger = groupes.filter((g) => g.statut === "refuse");
   const prenom = S.moi.nom.split(" ")[0];
+  const mois = S.modeCal === "mois" ? await sectionMois() : null;
   return h("div", { class: "ecran" },
     entete("Punch", null, null, h("button", { onclick: async () => { await sb.auth.signOut(); } }, "Quitter")),
     h("main", { class: "contenu" },
@@ -431,7 +509,8 @@ async function vueAccueil() {
         duJour.length ? h("div", null, duJour.map(carteEntree)) : h("p", { class: "muet" }, absAuj ? "Journée non travaillée." : "Rien d’entré pour aujourd’hui.")),
       h("button", { class: "btn primaire geant", onclick: () => nouvelleEntree(auj) }, "+ Punch mes heures"),
       h("div", null, h("div", { class: "etiquette", style: { marginBottom: "8px" } }, "Pas travaillé aujourd’hui ?"), boutonsAbsence(auj, absAuj)),
-      h("section", null,
+      choixModeCal(),
+      mois || h("section", null,
         h("div", { class: "semaine-nav", style: { marginBottom: "10px" } },
           h("button", { "aria-label": "Semaine précédente", onclick: () => { S.semaine = ajouterJours(lundi, -7); rendre(); } }, "‹"),
           h("div", { class: "lib" }, cetteSemaine ? "Ma semaine" : `Semaine du ${lundi.getDate()} ${MOIS[lundi.getMonth()]}`,
