@@ -2186,7 +2186,7 @@ async function gestionQuickBooks() {
 
   // Employés → employé ou fournisseur (sous-traitant)
   const gens = [...L.employes, ...L.fournisseurs];
-  const employes = [...S.profils.values()].filter((p) => p.actif).sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+  const employes = [...S.profils.values()].filter((p) => p.actif && p.role !== "comptable").sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
   const selEmploye = new Map();
   const lignesEmployes = employes.map((p) => {
     const actuel = p.qbo_employee_id ? `${p.qbo_type || "Employee"}:${p.qbo_employee_id}` : "";
