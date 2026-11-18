@@ -960,7 +960,7 @@ function formEntree({ entree, date, employeId }) {
 
   let selEmploye = null;
   if (admin && nouveau) {
-    const actifs = [...S.profils.values()].filter((p) => p.actif);
+    const actifs = [...S.profils.values()].filter((p) => p.actif && p.role !== "comptable");
     selEmploye = h("select", { value: employeId || S.moi.id }, actifs.map((p) => h("option", { value: p.id }, p.nom)));
   }
 
@@ -1285,7 +1285,7 @@ async function vueApprobation() {
     chargerAbsences({ debut: ymd(lundi), fin: ymd(ajouterJours(lundi, 6)) }),
   ]);
   const parEmploye = new Map();
-  for (const p of S.profils.values()) if (p.actif) parEmploye.set(p.id, []);
+  for (const p of S.profils.values()) if (p.actif && p.role !== "comptable") parEmploye.set(p.id, []);
   for (const e of rangees) {
     if (!parEmploye.has(e.employe_id)) parEmploye.set(e.employe_id, []);
     parEmploye.get(e.employe_id).push(e);
@@ -1589,7 +1589,7 @@ async function vuePaie() {
   const resumeAbsences = (id) => Object.entries(TYPES_ABSENCE)
     .map(([t, lib]) => { const n = absences.filter((a) => a.employe_id === id && a.type === t).length; return n ? `${lib} ${n} j` : null; })
     .filter(Boolean).join(" · ");
-  const employes = [...S.profils.values()].filter((p) => p.actif || entrees.some((e) => e.employe_id === p.id));
+  const employes = [...S.profils.values()].filter((p) => (p.actif && p.role !== "comptable") || entrees.some((e) => e.employe_id === p.id));
   const lignes = employes.map((p) => {
     const siennes = entrees.filter((e) => e.employe_id === p.id);
     return {

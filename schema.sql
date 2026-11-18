@@ -561,3 +561,21 @@ where not exists (select 1 from public.profils where lower(courriel) = 'm.fortin
 
 -- Taux facturé propre à un chantier (soumission négociée) ; vide = taux de base
 alter table public.chantiers add column if not exists taux_facturation numeric(8,2) check (taux_facturation is null or taux_facturation >= 0);
+
+-- Un comptable n'a jamais d'heures ni d'absences (personne ne peut lui en entrer)
+create or replace function public.pas_de_comptable()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+begin
+  if exists (select 1 from public.profils where id = new.employe_id and role = 'comptable') then
+    raise exception 'Un comptable n''a pas d''heures à entrer.';
+  end if;
+  return new;
+end $$;
+drop trigger if exists entrees_pas_comptable on public.entrees;
+create trigger entrees_pas_comptable before insert or update of employe_id on public.entrees
+  for each row execute function public.pas_de_comptable();
+drop trigger if exists absences_pas_comptable on public.absences;
+create trigger absences_pas_comptable before insert or update of employe_id on public.absences
+  for each row execute function public.pas_de_comptable();
